@@ -1,0 +1,32 @@
+OSL Script
+Game: DR1
+
+Fade in from black for 0 frames
+Music|0, 0, 0
+
+0x33|30, 0, 0, %FIRST_SYNC_VALUE
+
+for (i in 0 until %FRAMES_BETWEEN_VALUES) {
+    Wait Frame|
+}
+
+0x33|30, 0, 0, %SECOND_SYNC_VALUE
+
+for (i in 0 until %FRAMES_BETWEEN_VALUES) {
+    Wait Frame|
+}
+
+0x33|30, 0, 0, %THIRD_SYNC_VALUE
+
+for (i in 0 until %FRAMES_BETWEEN_VALUES) {
+    Wait Frame|
+}
+
+0x33|30, 0, %FOURTH_SYNC_DIV, %FOURTH_SYNC_REM
+
+for (i in 0 until %FRAMES_BETWEEN_VALUES) {
+    Wait Frame|
+}
+
+Script|%FILE_CHAPTER, %FILE_SCENE, %FILE_ROOM
+Stop Script|
