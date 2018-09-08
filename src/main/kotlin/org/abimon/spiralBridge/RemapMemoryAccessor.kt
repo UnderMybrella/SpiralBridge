@@ -29,10 +29,7 @@ open class RemapMemoryAccessor(pid: Int) : OSXMemoryAccessor(pid) {
             remappedRegions[region.start] = MacOSPointer(newAddress.value, region.size)
         }
 
-        val newReadAddress = address - region.start
-        val newPointer = remappedRegions[region.start]!!.share(newReadAddress, size)
-
-        return MacOSPointer(newPointer, size) to KernReturn.KERN_SUCCESS
+        return MacOSPointer(Pointer.nativeValue(remappedRegions[region.start]) + (address - region.start), size) to KernReturn.KERN_SUCCESS
     }
 
     override fun deallocateMemory(pointer: Pointer): KernReturn? = null
