@@ -1,4 +1,4 @@
-package org.abimon.spiralBridge
+package org.abimon.spiralBridge.osx
 
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
@@ -8,10 +8,10 @@ import org.abimon.colonelAccess.osx.*
 open class RemapMemoryAccessor(pid: Int) : OSXMemoryAccessor(pid) {
     protected val remappedRegions: MutableMap<Long, MacOSPointer> = HashMap()
 
-    override fun readMemory(address: Long, size: Long): Pair<MacOSPointer?, KernReturn?> {
+    override fun readMemory(address: Long, size: Long): Triple<MacOSPointer?, KernReturn?, Long?> {
         val (region, regionKret) = getNextRegion(address)
         if (region == null)
-            return null to regionKret
+            return Triple(null, regionKret, null)
 
         if (remappedRegions[region.start] == null) {
             val newAddress = LongByReference(0)
@@ -29,7 +29,7 @@ open class RemapMemoryAccessor(pid: Int) : OSXMemoryAccessor(pid) {
             remappedRegions[region.start] = MacOSPointer(newAddress.value, region.size)
         }
 
-        return MacOSPointer(Pointer.nativeValue(remappedRegions[region.start]) + (address - region.start), size) to KernReturn.KERN_SUCCESS
+        return Triple(MacOSPointer(Pointer.nativeValue(remappedRegions[region.start]) + (address - region.start), size), KernReturn.KERN_SUCCESS, size)
     }
 
     override fun deallocateMemory(pointer: Pointer): KernReturn? = null

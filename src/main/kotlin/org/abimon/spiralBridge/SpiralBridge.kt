@@ -20,9 +20,9 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
         while (isActive) {
             delay(FRAMERATE, TimeUnit.MILLISECONDS)
 
-            val (memory) = memoryAccessor.readMemory(gameStateAddress + (28 * 2), 6)
+            val (memory, _, readSize) = memoryAccessor.readMemory(gameStateAddress + (28 * 2), 6)
 
-            if (memory == null) {
+            if (memory == null || readSize != 6L) {
                 delay(FRAMERATE, TimeUnit.MILLISECONDS)
                 continue
             }

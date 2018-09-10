@@ -21,7 +21,7 @@ dependencies {
     compile "org.abimon:SpiralFormats:4d100b5"
     compile "org.abimon:OpenSpiralLanguage:fe8665b"
 
-    compile "org.abimon:ColonelAccess:78dbaf3"
+    compile "org.abimon:ColonelAccess:3493264"
 
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }

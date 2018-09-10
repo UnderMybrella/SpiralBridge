@@ -1,6 +1,8 @@
 package org.abimon.spiralBridge
 
+import org.abimon.colonelAccess.handle.MemoryAccessor
 import org.abimon.colonelAccess.osx.KernReturn
+import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
 import org.abimon.osl.SpiralDrillBit
 import org.abimon.spiral.core.objects.customLin
@@ -8,17 +10,24 @@ import org.abimon.spiral.core.objects.scripting.CustomLin
 import org.abimon.spiral.core.objects.scripting.lin.LinScript
 import org.abimon.spiral.core.objects.scripting.lin.dr1.DR1LoadScriptEntry
 import org.abimon.spiral.core.objects.scripting.lin.dr2.DR2LoadScriptEntry
+import org.abimon.spiral.core.utils.DataHandler
+import org.abimon.spiralBridge.osx.RemapMemoryAccessor
+import org.abimon.spiralBridge.windows.BufferMemoryAccessor
 import org.parboiled.parserunners.BasicParseRunner
 import org.parboiled.support.ParsingResult
+import java.awt.Desktop
 import java.io.File
 import java.io.FileOutputStream
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
 import java.util.function.UnaryOperator
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.roundToLong
 import kotlin.system.measureNanoTime
 
 object Synchronisation {
@@ -32,12 +41,43 @@ object Synchronisation {
 
     val GAME_STATE_OFFSET = 30 * 2
 
+    @JvmStatic
+    fun main(args: Array<String>) {
+        println("Starting up as ${MemoryAccessor.ourPID}")
+        enableDebugForWindows()
+
+        os.getDRGame()?.let { (pid, game) ->
+            println("(DEBUG) Killing ${game.name} with PID $pid")
+
+            ProcessBuilder("taskkill", "/PID", pid.toString(), "/F").start().waitFor()
+        }
+
+        val jsonParser = OSL.JsonParser()
+
+        DataHandler.stringToMap = { string -> jsonParser.parse(string) }
+        DataHandler.streamToMap = { stream -> jsonParser.parse(String(stream.readBytes())) }
+
+        synchronise(File("D:\\Games\\Steam\\steamapps\\common\\Danganronpa Trigger Happy Havoc"))
+    }
+
+    fun accessorForSystem(pid: Int): MemoryAccessor<*, *> {
+        val os = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH)
+        if (os.indexOf("mac") >= 0 || os.indexOf("darwin") >= 0) {
+            return RemapMemoryAccessor(pid)
+        } else if (os.indexOf("win") >= 0) {
+            //return BufferMemoryAccessor(pid)
+        } else if (os.indexOf("nux") >= 0) {
+            //return LinuxMemoryAccessor(pid)
+        }
+
+        return MemoryAccessor.accessorForSystem(pid)
+    }
+
     fun synchronise(rootDir: File): SpiralBridge<*, *>? {
         var running: Pair<Int, EnumGame>? = os.getDRGame()
 
         if (running == null) {
-
-            ProcessBuilder("open", "steam://run/413410").start()
+            Desktop.getDesktop().browse(URI("steam://run/413410"))
 
             print("Waiting for Danganronpa: Trigger Happy Havoc to start up")
 
@@ -56,18 +96,18 @@ object Synchronisation {
         println("Danganronpa game $danganronpa found with PID $pid")
         println("Acquiring memory accessor...")
 
-        val memoryAccessor = RemapMemoryAccessor(pid) //MemoryAccessor.accessorForSystem(pid)
+        val memoryAccessor = accessorForSystem(pid)
 
-        println("Grabbing writable memory regions of Danganronpa; heap, or stack")
+        println("Grabbing viable memory regions of Danganronpa; heap, or stack")
 
-        val viableRegions = memoryAccessor.getAllRegions()
-                .filter { region -> region.canWrite && (region.detail.isBlank() || region.detail == memoryAccessor.detail) } //We only want regions that are ours, or private (blank)
-                .take(2) //We only want two
+        val viableRegions = memoryAccessor.getAllViableDanganRegions()
                 .mapIndexed { index, memoryRegion -> memoryRegion to index.toLong() } //Saves memory heap later (I hope)
+
+        println("${viableRegions.size} viable regions")
 
         val regionMemory = ShortArray((viableRegions.maxBy { region -> region.first.size }!!.first.size / 2).toInt()) { 0 }
 
-        println("Currently have ${regionMemory.size} ints stored in memory")
+        println("Currently have ${regionMemory.size} shorts stored in memory")
 
         println("Benchmarking read times...")
 
@@ -81,29 +121,33 @@ object Synchronisation {
         val loopTimes = (0 until 10).map {
             viableRegions.map { region ->
                 measureNanoTime {
-                    val (memory, kret) = memoryAccessor.readMemory(region.first.start, region.first.size)
+                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
 
-                    if (memory == null || kret != KernReturn.KERN_SUCCESS) {
-                        println("ERR: Synchronisation failed; attempted to read memory region 0x${region.first.start.toString(16)}, got $kret")
+                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || sizeRead == null) {
+                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
                         return null
                     }
 
-                    memory.read(0, regionMemory, 0, (region.first.size / 2).toInt())
+                    try {
+                        memory.read(0, regionMemory, 0, sizeRead.toInt() / 2)
 
-                    for (i in 0 until (region.first.size / 2).toInt()) {
-                        currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
-                        currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
-                        currentMemValue = regionMemory[i].toInt()
+                        for (i in 0 until (region.first.size / 2).toInt()) {
+                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
+                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
+                            currentMemValue = regionMemory[i].toInt()
 
-                        if (currentValue == 1 && currentMemValue == 2) {
-                        } else if (currentValue == 2 && currentMemValue == 4) {
-                        } else if (currentValue == 4 && currentMemValue == 8) {
-                        } else if (currentValue == 8 && currentMemValue == 1) {
-                        } else if (currentValue == 0) {
-                        } else if (currentValue != currentMemValue) {
+                            if (currentValue == 1 && currentMemValue == 2) {
+                            } else if (currentValue == 2 && currentMemValue == 4) {
+                            } else if (currentValue == 4 && currentMemValue == 8) {
+                            } else if (currentValue == 8 && currentMemValue == 1) {
+                            } else if (currentValue == 0) {
+                            } else if (currentValue != currentMemValue) {
+                            }
+
+                            candidates[region.second.toInt()][i] = ((0 and VALUE_MASK) shl 16) or (0 and VALUE_MASK)
                         }
-
-                        candidates[region.second.toInt()][i] = ((0 and VALUE_MASK) shl 16) or (0 and VALUE_MASK)
+                    } finally {
+                        memoryAccessor.deallocateMemory(memory)
                     }
                 }
             }.sum()
@@ -111,18 +155,18 @@ object Synchronisation {
 
         val minLoopTime = loopTimes.min()!!
         val maxLoopTime = loopTimes.max()!!
-        val avgLoopTime = loopTimes.average()
+        val avgLoopTime = loopTimes.average().roundToLong()
 
         println("Benchmarked times min/max/avg: $minLoopTime ns/$maxLoopTime ns/$avgLoopTime ns")
 
         //We take the maximum time it would take to loop through the memory, and multiply it by 1.5 to be safe
-        //Then, we multiple that by 5 to simulate 5 loops through memory space, and divide it by the duration of 1 frame
+        //Then, we multiple that by 2 to simulate 2 loops through memory space, and divide it by the duration of 1 frame
 
         val waitXFrames = ceil(((maxLoopTime * 1.5) * 5) / (TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS) / 60)).toInt()
 
-        println("Wait $waitXFrames frames per loop")
+        println("Wait $waitXFrames frames (${waitXFrames / 60}s) per loop")
 
-        println("Compiling synchronisation scripts...")
+        println("Backing up existing scripts")
 
         //For this, we want to do the following:
         //1.    Take all existing scripts and back them up
@@ -136,7 +180,7 @@ object Synchronisation {
         //5b.   Alternatively, if any of our blocks of memory have an int value of our initial synchronisation value * 4, we store them in a second candidates list
         //5c.   If any block of memory ever ends up
 
-        val scriptsFolder = File(rootDir, "Dr1/data/us/script")
+        val scriptsFolder = File(rootDir, "Dr1${File.separator}data${File.separator}us${File.separator}script")
         val scripts = scriptsFolder.listFiles()
                 .filter { file -> file.isFile && file.name.matches(BACKED_UP_SCRIPT_REGEX) }
                 .map { file -> File(scriptsFolder, file.name.substring(12)) }
@@ -146,14 +190,19 @@ object Synchronisation {
                 }
 
         //1.    Take all existing scripts and back them up
-        scripts.forEach { file ->
-            val dest = File(scriptsFolder, "sync_backup_${file.name}")
-            if (!dest.exists() && file.exists())
-                Files.move(file.toPath(), dest.toPath())
+        val backupTime = measureNanoTime {
+            scripts.forEach { file ->
+                val dest = File(scriptsFolder, "sync_backup_${file.name}")
+                if (!dest.exists() && file.exists())
+                    Files.move(file.toPath(), dest.toPath())
 
-            if (file.exists())
-                file.delete()
+                if (file.exists())
+                    file.delete()
+            }
         }
+        println("Backing up existing scripts took $backupTime ns")
+
+        println("Compiling OSL script...")
 
         try {
             //2a.   We pick a random number; this is our initial synchronisation value. It should be between 16 and 64, to give us a nice general range
@@ -179,6 +228,9 @@ object Synchronisation {
 
             try {
                 val parser = OpenSpiralLanguageParser { ByteArray(0) }
+
+                //For slow systems like mine
+                parser.maxForLoopFange = max(parser.maxForLoopFange, waitXFrames)
 
                 parser["FILE_CHAPTER"] = randChapter
                 parser["FILE_ROOM"] = randRoom
@@ -221,17 +273,23 @@ object Synchronisation {
                 }
             }
 
-            val scriptEntries = customScript.entries.toTypedArray()
-            scripts.forEach { file ->
-                currentChapter = file.name.substring(1, 3).toInt()
-                currentRoom = file.name.substring(4, 7).toInt()
-                currentScene = file.name.substring(8, 11).toInt()
+            println("Compiling synchronisation scripts...")
 
-                customScript.entries.clear()
-                customScript.addAll(scriptEntries.map(replaceInScript::apply))
+            val compilingSynchronisationScriptTime = measureNanoTime {
+                val scriptEntries = customScript.entries.toTypedArray()
+                scripts.forEach { file ->
+                    currentChapter = file.name.substring(1, 3).toInt()
+                    currentRoom = file.name.substring(4, 7).toInt()
+                    currentScene = file.name.substring(8, 11).toInt()
 
-                FileOutputStream(file).use(customScript::compile)
+                    customScript.entries.clear()
+                    customScript.addAll(scriptEntries.map(replaceInScript::apply))
+
+                    FileOutputStream(file).use(customScript::compile)
+                }
             }
+
+            println("Compilation of synchronisation scripts took $compilingSynchronisationScriptTime ns")
 
             println("Synchronising on $firstSyncValue, $secondSyncValue, $thirdSyncValue, and $fourthSyncValue")
 
@@ -244,80 +302,86 @@ object Synchronisation {
 
             while (gameStateStart == null) {
                 viableRegions.forEach { region ->
-                    val (memory, kret) = memoryAccessor.readMemory(region.first.start, region.first.size)
+                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
 
-                    if (memory == null || kret != KernReturn.KERN_SUCCESS) {
-                        println("ERR: Synchronisation failed; attempted to read memory region 0x${region.first.start.toString(16)}, got $kret")
+                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || (sizeRead ?: 0) <= 0) {
+                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
                         return null
                     }
 
-                    memory.read(0, regionMemory, 0, (region.first.size / 2).toInt())
 
-                    for (i in 0 until (region.first.size / 2).toInt()) {
-                        currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
-                        currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
-                        currentMemValue = regionMemory[i].toInt()
 
-                        newValue = currentValue
-                        newCount = currentCount
+                    try {
+                        memory.read(0, regionMemory, 0, sizeRead!!.toInt() / 2)
 
-                        if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
-                            if (currentCount == 3) {
-                                gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
-                                break
-                            }
+                        for (i in 0 until (region.first.size / 2).toInt()) {
+                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
+                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
+                            currentMemValue = regionMemory[i].toInt()
 
-                            newValue = secondSyncValue
-                            newCount = ++currentCount
-                        } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
-                            if (currentCount == 3) {
-                                gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
-                                break
-                            }
+                            newValue = currentValue
+                            newCount = currentCount
 
-                            newValue = thirdSyncValue
-                            newCount = ++currentCount
-                        } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
-                            if (currentCount == 3) {
-                                gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
-                                break
-                            }
-
-                            newValue = fourthSyncValue
-                            newCount = ++currentCount
-                        } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
-                            if (currentCount == 3) {
-                                gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
-                                break
-                            }
-
-                            newValue = firstSyncValue
-                            newCount = ++currentCount
-                        } else if (currentValue == 0) {
-                            when (currentMemValue) {
-                                firstSyncValue -> {
-                                    newValue = firstSyncValue
-                                    newCount = 1
+                            if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
+                                if (currentCount == 3) {
+                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    break
                                 }
-                                secondSyncValue -> {
-                                    newValue = secondSyncValue
-                                    newCount = 1
+
+                                newValue = secondSyncValue
+                                newCount = ++currentCount
+                            } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
+                                if (currentCount == 3) {
+                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    break
                                 }
-                                thirdSyncValue -> {
-                                    newValue = thirdSyncValue
-                                    newCount = 1
+
+                                newValue = thirdSyncValue
+                                newCount = ++currentCount
+                            } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
+                                if (currentCount == 3) {
+                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    break
                                 }
-                                fourthSyncValue -> {
-                                    newValue = fourthSyncValue
-                                    newCount = 1
+
+                                newValue = fourthSyncValue
+                                newCount = ++currentCount
+                            } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
+                                if (currentCount == 3) {
+                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    break
                                 }
+
+                                newValue = firstSyncValue
+                                newCount = ++currentCount
+                            } else if (currentValue == 0) {
+                                when (currentMemValue) {
+                                    firstSyncValue -> {
+                                        newValue = firstSyncValue
+                                        newCount = 1
+                                    }
+                                    secondSyncValue -> {
+                                        newValue = secondSyncValue
+                                        newCount = 1
+                                    }
+                                    thirdSyncValue -> {
+                                        newValue = thirdSyncValue
+                                        newCount = 1
+                                    }
+                                    fourthSyncValue -> {
+                                        newValue = fourthSyncValue
+                                        newCount = 1
+                                    }
+                                }
+                            } else if (currentValue != currentMemValue) {
+                                newValue = 0
+                                newCount = 0
                             }
-                        } else if (currentValue != currentMemValue) {
-                            newValue = 0
-                            newCount = 0
+
+                            candidates[region.second.toInt()][i] = ((newCount and VALUE_MASK) shl 16) or (newValue and VALUE_MASK)
                         }
-
-                        candidates[region.second.toInt()][i] = ((newCount and VALUE_MASK) shl 16) or (newValue and VALUE_MASK)
+                    } finally {
+                        memoryAccessor.deallocateMemory(memory)
                     }
                 }
 
@@ -330,12 +394,17 @@ object Synchronisation {
             println("Finished synchronising, returning original scripts")
 
             //6. Delete
-            scriptsFolder.listFiles()
-                    .filter { file -> file.isFile && file.name.matches(BACKED_UP_SCRIPT_REGEX) }
-                    .forEach { file ->
-                        val dest = File(scriptsFolder, file.name.substring(12))
-                        Files.move(file.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                    }
+            val returnTime = measureNanoTime {
+                scriptsFolder.listFiles()
+                        .filter { file -> file.isFile && file.name.matches(BACKED_UP_SCRIPT_REGEX) }
+                        .forEach { file ->
+                            val dest = File(scriptsFolder, file.name.substring(12))
+                            Files.move(file.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                        }
+            }
+
+            println("Returning original scripts took $returnTime ns")
+            println("Done.")
         }
     }
 
