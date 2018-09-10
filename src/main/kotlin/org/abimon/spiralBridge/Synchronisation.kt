@@ -12,7 +12,6 @@ import org.abimon.spiral.core.objects.scripting.lin.dr1.DR1LoadScriptEntry
 import org.abimon.spiral.core.objects.scripting.lin.dr2.DR2LoadScriptEntry
 import org.abimon.spiral.core.utils.DataHandler
 import org.abimon.spiralBridge.osx.RemapMemoryAccessor
-import org.abimon.spiralBridge.windows.BufferMemoryAccessor
 import org.parboiled.parserunners.BasicParseRunner
 import org.parboiled.support.ParsingResult
 import java.awt.Desktop
@@ -41,25 +40,6 @@ object Synchronisation {
 
     val GAME_STATE_OFFSET = 30 * 2
 
-    @JvmStatic
-    fun main(args: Array<String>) {
-        println("Starting up as ${MemoryAccessor.ourPID}")
-        enableDebugForWindows()
-
-        os.getDRGame()?.let { (pid, game) ->
-            println("(DEBUG) Killing ${game.name} with PID $pid")
-
-            ProcessBuilder("taskkill", "/PID", pid.toString(), "/F").start().waitFor()
-        }
-
-        val jsonParser = OSL.JsonParser()
-
-        DataHandler.stringToMap = { string -> jsonParser.parse(string) }
-        DataHandler.streamToMap = { stream -> jsonParser.parse(String(stream.readBytes())) }
-
-        synchronise(File("D:\\Games\\Steam\\steamapps\\common\\Danganronpa Trigger Happy Havoc"))
-    }
-
     fun accessorForSystem(pid: Int): MemoryAccessor<*, *> {
         val os = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH)
         if (os.indexOf("mac") >= 0 || os.indexOf("darwin") >= 0) {
@@ -74,6 +54,7 @@ object Synchronisation {
     }
 
     fun synchronise(rootDir: File): SpiralBridge<*, *>? {
+        println("Attempting synchronisation to $rootDir (Exists: ${rootDir.exists()})")
         var running: Pair<Int, EnumGame>? = os.getDRGame()
 
         if (running == null) {
