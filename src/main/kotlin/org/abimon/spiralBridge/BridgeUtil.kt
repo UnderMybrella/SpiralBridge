@@ -52,7 +52,7 @@ fun <E : Any, P : Pointer> MemoryAccessor<E, P>.getAllViableDanganRegions(): Arr
                         }
                     }
 
-                    println("Is our test region within bounds? (0x${startAddr.toString(16)} <= 0x2E47E4 <= 0x${endAddr.toString(16)}): ${startAddr <= 0x2E47E4 && 0x2E47E4 <= endAddr}")
+                    //println("Is our test region within bounds? (0x${startAddr.toString(16)} <= 0x2E47E4 <= 0x${endAddr.toString(16)}): ${startAddr <= 0x2E47E4 && 0x2E47E4 <= endAddr}")
 
                     return@let arrayOf(MemoryRegion(startAddr, endAddr - startAddr, 1, detail))
                 }
