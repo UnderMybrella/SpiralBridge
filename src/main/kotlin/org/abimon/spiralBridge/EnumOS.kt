@@ -42,7 +42,7 @@ enum class EnumOS {
                             if(parts.size < 3)
                                 return@forEach
 
-                            val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[0].contains(name) } }
+                            val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[0].toLowerCase().contains(name.toLowerCase()) } }
                             if(dr != null)
                                 return parts[1].trim().toInt() to dr
                         }
@@ -61,7 +61,7 @@ enum class EnumOS {
                         lines.forEach { process ->
                             val parts = process.trim().split(regex, limit = 4)
 
-                            val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[3].contains(name) } }
+                            val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[3].toLowerCase().contains(name.toLowerCase()) } }
                             if(dr != null)
                                 return parts[0].trim().toInt() to dr
                         }
