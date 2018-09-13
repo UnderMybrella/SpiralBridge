@@ -2,7 +2,6 @@ package org.abimon.spiralBridge
 
 import org.abimon.colonelAccess.handle.MemoryAccessor
 import org.abimon.colonelAccess.osx.KernReturn
-import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
 import org.abimon.osl.SpiralDrillBit
 import org.abimon.spiral.core.objects.customLin
@@ -10,7 +9,6 @@ import org.abimon.spiral.core.objects.scripting.CustomLin
 import org.abimon.spiral.core.objects.scripting.lin.LinScript
 import org.abimon.spiral.core.objects.scripting.lin.dr1.DR1LoadScriptEntry
 import org.abimon.spiral.core.objects.scripting.lin.dr2.DR2LoadScriptEntry
-import org.abimon.spiral.core.utils.DataHandler
 import org.abimon.spiralBridge.osx.RemapMemoryAccessor
 import org.parboiled.parserunners.BasicParseRunner
 import org.parboiled.support.ParsingResult
@@ -194,8 +192,8 @@ object Synchronisation {
             val secondSyncValue = firstSyncValue * 3 + ThreadLocalRandom.current().nextInt(16, 64)
             val thirdSyncValue = max(secondSyncValue / 2 - ThreadLocalRandom.current().nextInt(0, 16), firstSyncValue)
             val fourthSyncValue = firstSyncValue + secondSyncValue + thirdSyncValue
-            val fourthSyncValueDiv = fourthSyncValue / 256
-            val fourthSyncValueRem = fourthSyncValue % 256
+//            val fourthSyncValueDiv = fourthSyncValue / 256
+//            val fourthSyncValueRem = fourthSyncValue % 256
 
             //3a.   We write a script that calls itself, and starts communicating back to us.
             //3b.   The script has to set the sync code to our number from before, and then that number times 4; we wait s in between to ensure the mothership picks up on it
@@ -220,8 +218,9 @@ object Synchronisation {
                 parser["FIRST_SYNC_VALUE"] = firstSyncValue
                 parser["SECOND_SYNC_VALUE"] = secondSyncValue
                 parser["THIRD_SYNC_VALUE"] = thirdSyncValue
-                parser["FOURTH_SYNC_DIV"] = fourthSyncValueDiv
-                parser["FOURTH_SYNC_REM"] = fourthSyncValueRem
+                parser["FOURTH_SYNC_VALUE"] = fourthSyncValue
+//                parser["FOURTH_SYNC_DIV"] = fourthSyncValueDiv
+//                parser["FOURTH_SYNC_REM"] = fourthSyncValueRem
 
                 parser["FRAMES_BETWEEN_VALUES"] = waitXFrames
 

@@ -19,7 +19,7 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.24.0'
 
     compile "org.abimon:SpiralFormats:4d100b5"
-    compile "org.abimon:OpenSpiralLanguage:fe8665b"
+    compile "org.abimon:OpenSpiralLanguage:a5c8cba"
 
     compile "org.abimon:ColonelAccess:3493264"
 
