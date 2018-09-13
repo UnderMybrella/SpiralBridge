@@ -1,10 +1,16 @@
 package org.abimon.spiralBridge
 
 sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
-    data class Synchronise(override val data: Int): SpiralBridgeData<Int>(1, data)
-    data class PrevChoice (override val data: Int): SpiralBridgeData<Int>(2, data)
+    open class IntData(op: Int, override val data: Int): SpiralBridgeData<Int>(op, data) {
+        override fun serialiseData(): Int = data
+    }
 
-    data class UnknownValue(override val op: Int, override val data: Int): SpiralBridgeData<Int>(op, data)
+    data class Synchronise(override val data: Int): IntData(1, data)
+    data class PrevChoice (override val data: Int): IntData(1, data)
+
+    data class UnknownValue(override val op: Int, override val data: Int): IntData(op, data)
+
+    abstract fun serialiseData(): Int
 
     companion object {
         fun valueFor(op: Int, param: Int): SpiralBridgeData<*> {

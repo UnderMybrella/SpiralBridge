@@ -1,5 +1,6 @@
 package org.abimon.spiralBridge
 
+import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.delay
@@ -14,9 +15,9 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
     
     val listeners: MutableList<SpiralBridgeListener> = ArrayList()
     private val changes: MutableList<Long> = ArrayList()
+    private var prevMemData = 0L
 
     val scoutingJob: Job = launch {
-        var prevMemData = 0L
         while (isActive) {
             delay(FRAMERATE, TimeUnit.MILLISECONDS)
 
@@ -59,5 +60,27 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
             return null
 
         return DRGameState(memory)
+    }
+
+    fun writeGameState(state: DRGameState): Pair<E?, Long?> {
+        val mem = Memory((state.data.size * 2).toLong())
+        mem.write(0, state.data, 0, state.data.size)
+
+        return memoryAccessor.writeMemory(gameStateAddress, mem, mem.size())
+    }
+
+    fun writeSpiralBridgeData(data: SpiralBridgeData<*>): Pair<E?, Long?> {
+        val mem = Memory(6)
+        mem.setShort(0, data.op.toShort())
+
+        //Reverse of this is (param2 shl 16) or param1
+        val param = data.serialiseData()
+        val param1 = (param and 0x0000FFFF)
+        val param2 = param shr 16
+
+        mem.setShort(2, param1.toShort())
+        mem.setShort(4, param2.toShort())
+
+        return memoryAccessor.writeMemory(gameStateAddress + (28 * 2), mem, mem.size())
     }
 }
