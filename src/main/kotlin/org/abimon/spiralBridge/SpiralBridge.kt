@@ -73,10 +73,10 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
         val mem = Memory(6)
         mem.setShort(0, data.op.toShort())
 
-        //Reverse of this is (param2 shl 16) or param1
+        //Reverse of this is (param1 shl 16) or param2
         val param = data.serialiseData()
-        val param1 = (param and 0x0000FFFF)
-        val param2 = param shr 16
+        val param1 = param shr 16
+        val param2 = (param and 0x0000FFFF)
 
         mem.setShort(2, param1.toShort())
         mem.setShort(4, param2.toShort())
