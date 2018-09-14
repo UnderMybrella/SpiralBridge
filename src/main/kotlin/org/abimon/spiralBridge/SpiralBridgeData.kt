@@ -27,6 +27,13 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
             return when (op) {
                 1 -> Synchronise(param)
                 2 -> PrevChoice(param)
+                3 -> WaitForChoice
+                4 -> LoadBridgeFile(param)
+
+                128 -> ServerAck
+                129 -> ServerKey(param)
+                130 -> ServerChoice(param)
+
                 else -> UnknownValue(op, param)
             }
         }
