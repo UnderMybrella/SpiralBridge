@@ -5,8 +5,18 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
         override fun serialiseData(): Int = data
     }
 
+    object NoOp: IntData(0, 0)
     data class Synchronise(override val data: Int): IntData(1, data)
-    data class PrevChoice (override val data: Int): IntData(1, data)
+    data class PrevChoice (val prevChoice: Int): IntData(2, prevChoice)
+    object WaitForChoice: IntData(3, 0)
+    data class LoadBridgeFile(val fileID: Int): IntData(4, fileID) {
+        val chapter = fileID / 1000
+        val scene = fileID % 1000
+    }
+
+    object ServerAck: IntData(128, 0)
+    data class ServerKey(val key: Int): IntData(129, key)
+    data class ServerChoice(val choice: Int): IntData(130, choice)
 
     data class UnknownValue(override val op: Int, override val data: Int): IntData(op, data)
 
