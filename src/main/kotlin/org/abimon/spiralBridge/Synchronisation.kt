@@ -84,9 +84,9 @@ object Synchronisation {
 
         println("${viableRegions.size} viable regions")
 
-        val regionMemory = ShortArray((viableRegions.maxBy { region -> region.first.size }!!.first.size / 2).toInt()) { 0 }
+        val regionMemory = ByteArray((viableRegions.maxBy { region -> region.first.size }!!.first.size).toInt()) { 0 }
 
-        println("Currently have ${regionMemory.size} shorts stored in memory")
+        println("Currently have ${regionMemory.size} bytes stored in memory")
 
         println("Benchmarking read times...")
 
@@ -108,12 +108,12 @@ object Synchronisation {
                     }
 
                     try {
-                        memory.read(0, regionMemory, 0, sizeRead.toInt() / 2)
+                        memory.read(0, regionMemory, 0, sizeRead.toInt())
 
-                        for (i in 0 until (region.first.size / 2).toInt()) {
+                        for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
                             currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
                             currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
-                            currentMemValue = regionMemory[i].toInt()
+                            currentMemValue = ((regionMemory[i].toInt() and 0xFF shl 8) or (regionMemory[i + 1].toInt() and 0xFF))
 
                             if (currentValue == 1 && currentMemValue == 2) {
                             } else if (currentValue == 2 && currentMemValue == 4) {
@@ -150,11 +150,19 @@ object Synchronisation {
         //For this, we want to do the following:
         //1.    Take all existing scripts and back them up
         //1nb.  In the event of finding existing sync scripts, use the paths of those instead of backing up scripts
+
         //2a.   We pick a random number; this is our initial synchronisation value. It should be between 16 and 64, to give us a nice general range
         //2b.   We pick a second random number, which should be at least 3 times our initial sync value, with some fuzziness.
+        //2c.   We pick a third random number, which should be at least half our initial sync value, with some fuzziness; minimum of half the first number
+        //2d.   We pick a fourth random number, which should be the exact sum of our previous values plus 256, to ensure we have to use a short
+
         //3a.   We write a script that calls itself, and starts communicating back to us.
         //3b.   The script has to set the sync code to our first random number, and then our second number; we wait a number of frames in between to ensure the mothership picks up on it
+        //3c.   We set the text four times, the first is to (%FIRST_SYNC_VALUE << 48) | (%SECOND_SYNC_VALUE << 32) | (%THIRD_SYNC_VALUE << 16) | (%FOURTH_SYNC_VALUE << 0).
+        //3d.   Each time, we switch the order of the sync values for the text
+
         //4.    We compile that script, and save it to every script that we backed up
+
         //5a.   We begin listening out for any blocks of memory that have an int value of our initial synchronisation value, and store them in a candidates list
         //5b.   Alternatively, if any of our blocks of memory have an int value of our initial synchronisation value * 4, we store them in a second candidates list
         //5c.   If any block of memory ever ends up
@@ -191,12 +199,15 @@ object Synchronisation {
             val firstSyncValue = ThreadLocalRandom.current().nextInt(16, 64)
             val secondSyncValue = firstSyncValue * 3 + ThreadLocalRandom.current().nextInt(16, 64)
             val thirdSyncValue = max(secondSyncValue / 2 - ThreadLocalRandom.current().nextInt(0, 16), firstSyncValue)
-            val fourthSyncValue = firstSyncValue + secondSyncValue + thirdSyncValue
+            val fourthSyncValue = firstSyncValue + secondSyncValue + thirdSyncValue + 256
 //            val fourthSyncValueDiv = fourthSyncValue / 256
 //            val fourthSyncValueRem = fourthSyncValue % 256
 
             //3a.   We write a script that calls itself, and starts communicating back to us.
             //3b.   The script has to set the sync code to our number from before, and then that number times 4; we wait s in between to ensure the mothership picks up on it
+            //3c.   We set the text four times, the first is to (%FIRST_SYNC_VALUE << 48) | (%SECOND_SYNC_VALUE << 32) | (%THIRD_SYNC_VALUE << 16) | (%FOURTH_SYNC_VALUE << 0).
+            //3d.   Each time, we switch the order of the sync values for the text
+
             //4.    We compile that script, and save it to every script that we backed up
             val script = retrieve("scripts/synchronisation.osl")?.let { bytes -> String(bytes) } ?: ""
             val customScript: CustomLin
@@ -204,6 +215,46 @@ object Synchronisation {
             val randChapter = ThreadLocalRandom.current().nextInt(0, 255)
             val randRoom = ThreadLocalRandom.current().nextInt(0, 255)
             val randScene = ThreadLocalRandom.current().nextInt(0, 255)
+
+            val firstSyncText = String(intArrayOf(
+                    firstSyncValue and 0xFF, (firstSyncValue shr 8) and 0xFF,
+                    secondSyncValue and 0xFF, (secondSyncValue shr 8) and 0xFF,
+                    thirdSyncValue and 0xFF, (thirdSyncValue shr 8) and 0xFF,
+                    fourthSyncValue and 0xFF, (fourthSyncValue shr 8) and 0xFF
+            ).map(Int::toByte).toByteArray(), Charsets.UTF_16LE)
+
+            val secondSyncText = String(intArrayOf(
+                    fourthSyncValue and 0xFF, (fourthSyncValue shr 8) and 0xFF,
+                    firstSyncValue and 0xFF, (firstSyncValue shr 8) and 0xFF,
+                    secondSyncValue and 0xFF, (secondSyncValue shr 8) and 0xFF,
+                    thirdSyncValue and 0xFF, (thirdSyncValue shr 8) and 0xFF
+            ).map(Int::toByte).toByteArray(), Charsets.UTF_16LE)
+
+            val thirdSyncText = String(intArrayOf(
+                    thirdSyncValue and 0xFF, (thirdSyncValue shr 8) and 0xFF,
+                    fourthSyncValue and 0xFF, (fourthSyncValue shr 8) and 0xFF,
+                    firstSyncValue and 0xFF, (firstSyncValue shr 8) and 0xFF,
+                    secondSyncValue and 0xFF, (secondSyncValue shr 8) and 0xFF
+            ).map(Int::toByte).toByteArray(), Charsets.UTF_16LE)
+
+            val fourthSyncText = String(intArrayOf(
+                    secondSyncValue and 0xFF, (secondSyncValue shr 8) and 0xFF,
+                    thirdSyncValue and 0xFF, (thirdSyncValue shr 8) and 0xFF,
+                    fourthSyncValue and 0xFF, (fourthSyncValue shr 8) and 0xFF,
+                    firstSyncValue and 0xFF, (firstSyncValue shr 8) and 0xFF
+            ).map(Int::toByte).toByteArray(), Charsets.UTF_16LE)
+
+            val firstSyncTextLE = firstSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+            val firstSyncTextBE = firstSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+
+            val secondSyncTextLE = secondSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+            val secondSyncTextBE = secondSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+
+            val thirdSyncTextLE = thirdSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+            val thirdSyncTextBE = thirdSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+
+            val fourthSyncTextLE = fourthSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
+            val fourthSyncTextBE = fourthSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
 
             try {
                 val parser = OpenSpiralLanguageParser { ByteArray(0) }
@@ -219,8 +270,11 @@ object Synchronisation {
                 parser["SECOND_SYNC_VALUE"] = secondSyncValue
                 parser["THIRD_SYNC_VALUE"] = thirdSyncValue
                 parser["FOURTH_SYNC_VALUE"] = fourthSyncValue
-//                parser["FOURTH_SYNC_DIV"] = fourthSyncValueDiv
-//                parser["FOURTH_SYNC_REM"] = fourthSyncValueRem
+
+                parser["FIRST_SYNC_TEXT"] = firstSyncText
+                parser["SECOND_SYNC_TEXT"] = secondSyncText
+                parser["THIRD_SYNC_TEXT"] = thirdSyncText
+                parser["FOURTH_SYNC_TEXT"] = fourthSyncText
 
                 parser["FRAMES_BETWEEN_VALUES"] = waitXFrames
 
@@ -289,15 +343,13 @@ object Synchronisation {
                         return null
                     }
 
-
-
                     try {
                         memory.read(0, regionMemory, 0, sizeRead!!.toInt() / 2)
 
-                        for (i in 0 until (region.first.size / 2).toInt()) {
+                        for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
                             currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
                             currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
-                            currentMemValue = regionMemory[i].toInt()
+                            currentMemValue = ((regionMemory[i].toInt() and 0xFF shl 8) or (regionMemory[i + 1].toInt() and 0xFF))
 
                             newValue = currentValue
                             newCount = currentCount
@@ -369,6 +421,118 @@ object Synchronisation {
             }
 
             println("Found Sync Address: $gameStateStart")
+            println("Tracking down text buffer...")
+
+            Arrays.fill(candidates, 0)
+
+//            var textBufferStart: Long? = null
+//
+//            while (textBufferStart == null) {
+//                viableRegions.forEach { region ->
+//                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
+//
+//                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || (sizeRead ?: 0) <= 0) {
+//                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
+//                        return null
+//                    }
+//
+//                    try {
+//                        memory.read(0, regionMemory, 0, sizeRead!!.toInt() / 2)
+//
+//                        for (i in 0 until (sizeRead / 8).toInt()) {
+//                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
+//                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
+//
+//                            currentMemValue = when ((regionMemory[i * 4 + 0].toLong() shl 0) or
+//                                    (regionMemory[i * 4 + 1].toLong() shl 16) or
+//                                    (regionMemory[i * 4 + 2].toLong() shl 32) or
+//                                    (regionMemory[i * 4 + 3].toLong() shl 48)) {
+//                                firstSyncTextBE -> firstSyncValue
+//                                firstSyncTextLE -> firstSyncValue
+//
+//                                secondSyncTextBE -> secondSyncValue
+//                                secondSyncTextLE -> secondSyncValue
+//
+//                                thirdSyncTextBE -> thirdSyncValue
+//                                thirdSyncTextLE -> thirdSyncValue
+//
+//                                fourthSyncTextBE -> fourthSyncValue
+//                                fourthSyncTextLE -> fourthSyncValue
+//
+//                                0L -> 0
+//
+//                                else -> -1
+//                            }
+//
+//                            newValue = currentValue
+//                            newCount = currentCount
+//
+//                            if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
+//                                if (currentCount == 3) {
+//                                    gameStateStart = region.first.start + i * 8
+//                                    break
+//                                }
+//
+//                                newValue = secondSyncValue
+//                                newCount = ++currentCount
+//                            } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
+//                                if (currentCount == 3) {
+//                                    gameStateStart = region.first.start + i * 8
+//                                    break
+//                                }
+//
+//                                newValue = thirdSyncValue
+//                                newCount = ++currentCount
+//                            } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
+//                                if (currentCount == 3) {
+//                                    gameStateStart = region.first.start + i * 8
+//                                    break
+//                                }
+//
+//                                newValue = fourthSyncValue
+//                                newCount = ++currentCount
+//                            } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
+//                                if (currentCount == 3) {
+//                                    gameStateStart = region.first.start + i * 8
+//                                    break
+//                                }
+//
+//                                newValue = firstSyncValue
+//                                newCount = ++currentCount
+//                            } else if (currentValue == 0) {
+//                                when (currentMemValue) {
+//                                    firstSyncValue -> {
+//                                        newValue = firstSyncValue
+//                                        newCount = 1
+//                                    }
+//                                    secondSyncValue -> {
+//                                        newValue = secondSyncValue
+//                                        newCount = 1
+//                                    }
+//                                    thirdSyncValue -> {
+//                                        newValue = thirdSyncValue
+//                                        newCount = 1
+//                                    }
+//                                    fourthSyncValue -> {
+//                                        newValue = fourthSyncValue
+//                                        newCount = 1
+//                                    }
+//                                }
+//                            } else if (currentValue != currentMemValue) {
+//                                newValue = 0
+//                                newCount = 0
+//                            }
+//
+//                            candidates[region.second.toInt()][i] = ((newCount and VALUE_MASK) shl 16) or (newValue and VALUE_MASK)
+//                        }
+//                    } finally {
+//                        memoryAccessor.deallocateMemory(memory)
+//                    }
+//                }
+//
+//                //Thread.sleep(10)
+//            }
+
             return SpiralBridge(memoryAccessor, gameStateStart!!)
         } finally {
             println("Finished synchronising, returning original scripts")
@@ -448,4 +612,32 @@ object Synchronisation {
 
     fun retrieve(name: String): ByteArray? =
             Synchronisation::class.java.classLoader.getResourceAsStream(name)?.use { stream -> stream.readBytes() }
+
+    fun ByteArray.readInt64LE(index: Int = 0): Long {
+        val a = this[index + 0].toLong()
+        val b = this[index + 1].toLong()
+        val c = this[index + 2].toLong()
+        val d = this[index + 3].toLong()
+        val e = this[index + 4].toLong()
+        val f = this[index + 5].toLong()
+        val g = this[index + 6].toLong()
+        val h = this[index + 7].toLong()
+
+        return (((b shl 8) or (a shl 0) shl 48)) or (((d shl 8) or (c shl 0)) shl 32) or
+                (((f shl 8) or (e shl 0)) shl 16) or (((h shl 8) or (g shl 0)) shl 0)
+    }
+
+    fun ByteArray.readInt64BE(index: Int = 0): Long {
+        val a = this[index + 0].toLong()
+        val b = this[index + 1].toLong()
+        val c = this[index + 2].toLong()
+        val d = this[index + 3].toLong()
+        val e = this[index + 4].toLong()
+        val f = this[index + 5].toLong()
+        val g = this[index + 6].toLong()
+        val h = this[index + 7].toLong()
+
+        return (((a shl 8) or (b shl 0) shl 48)) or (((c shl 8) or (d shl 0)) shl 32) or
+                (((e shl 8) or (f shl 0)) shl 16) or (((g shl 8) or (h shl 0)) shl 0)
+    }
 }

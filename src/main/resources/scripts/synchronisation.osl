@@ -22,5 +22,17 @@ Wait for %FRAMES_BETWEEN_VALUES frames
 
 SpiralBridge: 17, 1984
 
+Text|%FIRST_SYNC_TEXT
+Wait for %FRAMES_BETWEEN_VALUES frames
+
+Text|%SECOND_SYNC_TEXT
+Wait for %FRAMES_BETWEEN_VALUES frames
+
+Text|%THIRD_SYNC_TEXT
+Wait for %FRAMES_BETWEEN_VALUES frames
+
+Text|%FOURTH_SYNC_TEXT
+Wait for %FRAMES_BETWEEN_VALUES frames
+
 Script|%FILE_CHAPTER, %FILE_SCENE, %FILE_ROOM
 Stop Script|
