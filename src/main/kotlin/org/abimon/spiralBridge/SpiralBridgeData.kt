@@ -13,6 +13,7 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
         val chapter = fileID / 1000
         val scene = fileID % 1000
     }
+    data class RequestAction(val action: BridgeRequest): IntData(5, action.code)
 
     object ServerAck: IntData(128, 0)
     data class ServerKey(val key: Int): IntData(129, key)
@@ -29,6 +30,7 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
                 2 -> PrevChoice(param)
                 3 -> WaitForChoice
                 4 -> LoadBridgeFile(param)
+                5 -> RequestAction(BridgeRequest.valueOf(param))
 
                 128 -> ServerAck
                 129 -> ServerKey(param)
