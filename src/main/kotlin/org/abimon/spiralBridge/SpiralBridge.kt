@@ -6,13 +6,17 @@ import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.abimon.colonelAccess.handle.MemoryAccessor
+import org.abimon.spiral.core.utils.writeIntXLE
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>, val gameStateAddress: Long) {
+class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P>, val gameStateAddress: Long, val textBufferAddress: Long? = null) {
     companion object {
         var FRAMERATE = 1000L / 60
+
+        var TEXT_BUFFER_SIZE = 512L
     }
-    
+
     val listeners: MutableList<SpiralBridgeListener> = ArrayList()
     private val changes: MutableList<Long> = ArrayList()
     private var prevMemData = 0L
@@ -38,8 +42,8 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
             }
         }
     }
-    
-    val eventBusJob: Job = launch { 
+
+    val eventBusJob: Job = launch {
         while (isActive && scoutingJob.isActive) {
             delay(FRAMERATE, TimeUnit.MILLISECONDS)
 
@@ -80,4 +84,54 @@ class SpiralBridge<E: Any, P: Pointer>(val memoryAccessor: MemoryAccessor<E, P>,
 
         return memoryAccessor.writeMemory(gameStateAddress + (28 * 2), mem, mem.size())
     }
+
+    var currentText: String?
+        get() = textBufferAddress?.let { textBuffer ->
+            val (memory, error, readSize) = memoryAccessor.readMemory(textBufferAddress, TEXT_BUFFER_SIZE)
+
+            if (memory == null)
+                return@let null
+
+            val baos = ByteArrayOutputStream()
+
+            for (i in 0 until (readSize ?: 0) step 2) {
+                val read = memory.readIntXLE(i, 2)
+                if (read == -1)
+                    break
+                if (read == 0x00)
+                    break
+
+                baos.writeIntXLE(read, 2)
+            }
+
+            return@let String(baos.toByteArray(), Charsets.UTF_16LE)
+        }
+        set(value) {
+            if (textBufferAddress != null) {
+                memoryAccessor.writeMemory(textBufferAddress, value?.toByteArray(Charsets.UTF_16LE) ?: byteArrayOf(0x00, 0x00))
+            }
+        }
+
+    fun clearOutTextBuffer(): Pair<Boolean, E?> {
+        if (textBufferAddress == null)
+            return false to null
+
+        val (memory, error, readSize) = memoryAccessor.readMemory(textBufferAddress, TEXT_BUFFER_SIZE)
+
+        if (memory == null)
+            return false to error
+
+        val (writeError) = memoryAccessor.writeMemory(textBufferAddress, ByteArray(readSize?.toInt() ?: 2) { 0x00 })
+
+        return true to writeError
+    }
+
+    inline fun Pointer.readIntXLE(offset: Long, x: Int): Number =
+            when (x) {
+                1 -> getByte(offset)
+                2 -> getShort(offset)
+                4 -> getInt(offset)
+                8 -> getLong(offset)
+                else -> throw IllegalArgumentException("$x is not 1, 2, 4, or 8")
+            }
 }

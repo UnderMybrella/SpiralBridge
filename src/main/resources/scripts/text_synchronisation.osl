@@ -4,17 +4,19 @@ Game: DR1
 Fade in from black for 0 frames
 Music|0, 0, 0
 
-SpiralBridge: Synchronise, %FIRST_SYNC_VALUE
+Text|%FIRST_SYNC_TEXT
 Wait for %FRAMES_BETWEEN_VALUES frames
 
-SpiralBridge: Synchronise, %SECOND_SYNC_VALUE
+Text|%SECOND_SYNC_TEXT
 Wait for %FRAMES_BETWEEN_VALUES frames
 
-SpiralBridge: Synchronise, %THIRD_SYNC_VALUE
+Text|%THIRD_SYNC_TEXT
 Wait for %FRAMES_BETWEEN_VALUES frames
 
-SpiralBridge: Synchronise, %FOURTH_SYNC_VALUE
+Text|%FOURTH_SYNC_TEXT
 Wait for %FRAMES_BETWEEN_VALUES frames
+
+Text|[Empty]
 
 Script|%FILE_CHAPTER, %FILE_SCENE, %FILE_ROOM
 Stop Script|
