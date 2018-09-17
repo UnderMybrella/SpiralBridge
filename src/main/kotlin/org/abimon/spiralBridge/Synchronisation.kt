@@ -386,7 +386,7 @@ object Synchronisation {
 
                             if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
                                 if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
                                     break
                                 }
 
@@ -394,7 +394,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
                                 if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
                                     break
                                 }
 
@@ -402,7 +402,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
                                 if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
                                     break
                                 }
 
@@ -410,7 +410,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
                                 if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i * 2 - GAME_STATE_OFFSET
+                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
                                     break
                                 }
 
@@ -487,11 +487,11 @@ object Synchronisation {
                     try {
                         memory.read(0, regionMemory, 0, sizeRead!!.toInt())
 
-                        for (i in 0 until (sizeRead / 8).toInt()) {
+                        for (i in 0 until (sizeRead - (sizeRead % 8) - 7).toInt()) {
                             currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
                             currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
 
-                            currentMemValue = when (regionMemory.readInt64LE(i * 8)) {
+                            currentMemValue = when (regionMemory.readInt64LE(i)) {
                             //firstSyncTextBE -> firstSyncValue
                                 firstSyncTextLE -> firstSyncValue
 
@@ -514,7 +514,7 @@ object Synchronisation {
 
                             if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
                                 if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i * 8
+                                    textBufferStart = region.first.start + i
                                     break
                                 }
 
@@ -522,7 +522,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
                                 if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i * 8
+                                    textBufferStart = region.first.start + i
                                     break
                                 }
 
@@ -530,7 +530,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
                                 if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i * 8
+                                    textBufferStart = region.first.start + i
                                     break
                                 }
 
@@ -538,7 +538,7 @@ object Synchronisation {
                                 newCount = ++currentCount
                             } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
                                 if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i * 8
+                                    textBufferStart = region.first.start + i
                                     break
                                 }
 
