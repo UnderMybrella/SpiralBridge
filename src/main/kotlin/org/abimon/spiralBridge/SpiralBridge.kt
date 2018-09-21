@@ -6,6 +6,7 @@ import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.abimon.colonelAccess.handle.MemoryAccessor
+import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
 import org.abimon.spiral.core.utils.writeIntXLE
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
@@ -21,11 +22,12 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     private val changes: MutableList<Long> = ArrayList()
     private var prevMemData = 0L
 
+    val scoutingReadAddress = gameStateAddress + (SpiralBridgeDrill.OP_CODE_GAME_STATE * 2)
     val scoutingJob: Job = launch {
         while (isActive && eventBusJob.isActive) {
             delay(FRAMERATE, TimeUnit.MILLISECONDS)
 
-            val (memory, error, readSize) = memoryAccessor.readMemory(gameStateAddress + (28 * 2), 6)
+            val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
 
             if (memory == null || readSize != 6L)
                 break
