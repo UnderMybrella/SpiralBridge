@@ -84,7 +84,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
         mem.setShort(2, param1.toShort())
         mem.setShort(4, param2.toShort())
 
-        return memoryAccessor.writeMemory(gameStateAddress + (28 * 2), mem, mem.size())
+        return memoryAccessor.writeMemory(scoutingReadAddress, mem, mem.size())
     }
 
     var currentText: String?
