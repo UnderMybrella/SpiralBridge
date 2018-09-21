@@ -6,6 +6,7 @@ import org.abimon.colonelAccess.osx.KernReturn
 import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
 import org.abimon.osl.SpiralDrillBit
+import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
 import org.abimon.spiral.core.objects.customLin
 import org.abimon.spiral.core.objects.scripting.CustomLin
 import org.abimon.spiral.core.objects.scripting.lin.LinScript
@@ -39,44 +40,11 @@ object Synchronisation {
     val VALUE_MASK = 0x0000FFFF.toInt()
     val COUNT_MASK = 0xFFFF0000.toInt()
 
-    val GAME_STATE_OFFSET = 30 * 2
+    val GAME_STATE_OFFSET = SpiralBridgeDrill.OP_CODE_PARAM_SMALL * 2
 
-    val FOUR_LETTER_WORDS = listOf(
-            "Able",
-            "Acid",
-            "Adds",
-            "Aero",
-            "Afar",
-            "Ages",
-            "Airy",
-            "Ajar",
-            "Alan",
-            "Ally",
-            "Baal",
-            "Baby",
-            "Bach",
-            "Back",
-            "Bade",
-            "Bags",
-            "Bait",
-            "Bake",
-            "Ball",
-            "Bard",
-            "Bane",
-            "Bars",
-            "Bath",
-            "Bead",
-            "Beam",
-            "Beef",
-            "Been",
-            "Bees",
-            "Beat",
-            "Bend",
-            "Beta",
-            "Bias",
-            "Bike",
-            "Blog"
-    ).shuffled().toTypedArray()
+    val FOUR_LETTER_WORDS = (0 until (256 * 256)).map { num ->
+        "[${(num shr 8).toChar()}${(num and 0xFF).toChar()}]"
+    }.shuffled().toTypedArray()
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -196,9 +164,9 @@ object Synchronisation {
         println("Benchmarked times min/max/avg: $minLoopTime ns/$maxLoopTime ns/$avgLoopTime ns")
 
         //We take the maximum time it would take to loop through the memory, and multiply it by 1.5 to be safe
-        //Then, we multiple that by 2 to simulate 2 loops through memory space, and divide it by the duration of 1 frame
+        //Then, we multiple that by 5 to simulate 5 loops through memory space, and divide it by the duration of 1 frame
 
-        val waitXFrames = ceil(((maxLoopTime * 1.5) * 2) / (TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS) / 60)).toInt()
+        val waitXFrames = ceil(((maxLoopTime * 1.5) * 5) / (TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS) / 60)).toInt()
 
         println("Wait $waitXFrames frames (${waitXFrames / 60}s) per loop")
 

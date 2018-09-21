@@ -55,7 +55,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     }
 
     fun readGameState(): DRGameState? {
-        val (memory) = memoryAccessor.readMemory(gameStateAddress, 60)
+        val (memory) = memoryAccessor.readMemory(gameStateAddress, 512)
 
         if (memory == null)
             return null

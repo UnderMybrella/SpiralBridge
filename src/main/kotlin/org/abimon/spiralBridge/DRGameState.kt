@@ -1,10 +1,11 @@
 package org.abimon.spiralBridge
 
 import com.sun.jna.Pointer
+import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
 import java.util.*
 
 data class DRGameState(val data: IntArray) {
-    constructor(pointer: Pointer): this(IntArray(30) { i ->
+    constructor(pointer: Pointer): this(IntArray(256) { i ->
         pointer.getShort((i * 2).toLong()).toInt()
     })
 
@@ -15,23 +16,23 @@ data class DRGameState(val data: IntArray) {
         get() = data[15]
 
     val spiralBridgeOp: Int
-        get() = data[28]
+        get() = data[SpiralBridgeDrill.OP_CODE_GAME_STATE]
 
     val spiralBridgeParamOne: Int
-        get() = data[29]
+        get() = data[SpiralBridgeDrill.OP_CODE_PARAM_BIG]
     val spiralBridgeParamTwo: Int
-        get() = data[30]
+        get() = data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
 
     val spiralBridgeParam: Int
-        get() = (data[29] shl 16) or data[30]
+        get() = (data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] shl 16) or data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
 
     private var cachedSpiralBridgeHash: Int? = null
     private var cachedSpiralBridgeData: SpiralBridgeData<*>? = null
 
     val spiralBridgeData: SpiralBridgeData<*>
         get() {
-            val op = data[28]
-            val param = (data[29] shl 8) or data[30]
+            val op = data[SpiralBridgeDrill.OP_CODE_GAME_STATE]
+            val param = (data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] shl 8) or data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
 
             var hash = 1
             hash = 31 * hash + op

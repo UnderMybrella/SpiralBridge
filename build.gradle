@@ -22,7 +22,7 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.24.0'
 
     compile "org.abimon:SpiralFormats:4d100b5"
-    compile "org.abimon:OpenSpiralLanguage:edf50cc"
+    compile "org.abimon:OpenSpiralLanguage:cfd5233"
 
     compile "org.abimon:ColonelAccess:8896069"
 
