@@ -125,6 +125,7 @@ object Synchronisation {
         val loopTimes = (0 until 10).map {
             viableRegions.map { region ->
                 measureNanoTime {
+                    val regionNum = region.second.toInt()
                     val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
 
                     if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || sizeRead == null) {
@@ -136,8 +137,8 @@ object Synchronisation {
                         memory.read(0, regionMemory, 0, sizeRead.toInt())
 
                         for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
-                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
-                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
+                            currentCount = (candidates[regionNum][i] and COUNT_MASK) shr 16
+                            currentValue = (candidates[regionNum][i] and VALUE_MASK) shr 0
                             currentMemValue = ((regionMemory[i].toInt() and 0xFF shl 8) or (regionMemory[i + 1].toInt() and 0xFF))
 
                             if (currentValue == 1 && currentMemValue == 2) {
@@ -148,7 +149,7 @@ object Synchronisation {
                             } else if (currentValue != currentMemValue) {
                             }
 
-                            candidates[region.second.toInt()][i] = ((0 and VALUE_MASK) shl 16) or (0 and VALUE_MASK)
+                            candidates[regionNum][i] = ((0 and VALUE_MASK) shl 16) or (0 and VALUE_MASK)
                         }
                     } finally {
                         memoryAccessor.deallocateMemory(memory)
@@ -163,10 +164,10 @@ object Synchronisation {
 
         println("Benchmarked times min/max/avg: $minLoopTime ns/$maxLoopTime ns/$avgLoopTime ns")
 
-        //We take the maximum time it would take to loop through the memory, and multiply it by 1.5 to be safe
+        //We take the average time it would take to loop through the memory, and multiply it by 1.5 to be safe
         //Then, we multiple that by 5 to simulate 5 loops through memory space, and divide it by the duration of 1 frame
 
-        val waitXFrames = ceil(((maxLoopTime * 1.5) * 5) / (TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS) / 60)).toInt()
+        val waitXFrames = ceil(((avgLoopTime * 1.5) * 5) / (TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS) / 60)).toInt()
 
         println("Wait $waitXFrames frames (${waitXFrames / 60}s) per loop")
 
@@ -228,8 +229,6 @@ object Synchronisation {
 
             //3a.   We write a script that calls itself, and starts communicating back to us.
             //3b.   The script has to set the sync code to our number from before, and then that number times 4; we wait s in between to ensure the mothership picks up on it
-            //3c.   We set the text four times, the first is to (%FIRST_SYNC_VALUE << 48) | (%SECOND_SYNC_VALUE << 32) | (%THIRD_SYNC_VALUE << 16) | (%FOURTH_SYNC_VALUE << 0).
-            //3d.   Each time, we switch the order of the sync values for the text
 
             //4.    We compile that script, and save it to every script that we backed up
             val script = retrieve("scripts/synchronisation.osl")?.let { bytes -> String(bytes) } ?: ""
@@ -242,10 +241,10 @@ object Synchronisation {
             val randRoom = ThreadLocalRandom.current().nextInt(0, 255)
             val randScene = ThreadLocalRandom.current().nextInt(0, 255)
 
-            val firstSyncText = FOUR_LETTER_WORDS[firstSyncValue % FOUR_LETTER_WORDS.size]
-            val secondSyncText = FOUR_LETTER_WORDS[secondSyncValue % FOUR_LETTER_WORDS.size]
-            val thirdSyncText = FOUR_LETTER_WORDS[thirdSyncValue % FOUR_LETTER_WORDS.size]
-            val fourthSyncText = FOUR_LETTER_WORDS[fourthSyncValue % FOUR_LETTER_WORDS.size]
+            val firstSyncText = "Pool" //FOUR_LETTER_WORDS[firstSyncValue % FOUR_LETTER_WORDS.size]
+            val secondSyncText = "Plus" //FOUR_LETTER_WORDS[secondSyncValue % FOUR_LETTER_WORDS.size]
+            val thirdSyncText = "Ball" //FOUR_LETTER_WORDS[thirdSyncValue % FOUR_LETTER_WORDS.size]
+            val fourthSyncText = "None" //FOUR_LETTER_WORDS[fourthSyncValue % FOUR_LETTER_WORDS.size]
 
             val firstSyncTextLE = firstSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
             val secondSyncTextLE = secondSyncText.toByteArray(Charsets.UTF_16LE).readInt64LE()
@@ -333,6 +332,7 @@ object Synchronisation {
 
             while (gameStateStart == null) {
                 viableRegions.forEach { region ->
+                    val regionNum = region.second.toInt()
                     val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
 
                     if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || (sizeRead ?: 0) <= 0) {
@@ -344,8 +344,8 @@ object Synchronisation {
                         memory.read(0, regionMemory, 0, sizeRead!!.toInt())
 
                         for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
-                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
-                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
+                            currentCount = (candidates[regionNum][i] and COUNT_MASK) shr 16
+                            currentValue = (candidates[regionNum][i] and VALUE_MASK) shr 0
                             //TODO: If this ever breaks, check endianness
                             currentMemValue = (((regionMemory[i + 1].toInt() and 0xFF) shl 8) or (regionMemory[i].toInt() and 0xFF))
 
