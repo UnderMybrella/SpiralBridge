@@ -1,5 +1,6 @@
 package org.abimon.spiralBridge
 
+import org.abimon.colonelAccess.handle.MemoryAccessor
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.*
@@ -42,6 +43,9 @@ enum class EnumOS {
                             if(parts.size < 3)
                                 return@forEach
 
+                            if (parts[1].trim().toInt() == MemoryAccessor.ourPID)
+                                return@forEach
+
                             val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[0].toLowerCase().contains(name.toLowerCase()) } }
                             if(dr != null)
                                 return parts[1].trim().toInt() to dr
@@ -60,6 +64,9 @@ enum class EnumOS {
                     BufferedReader(InputStreamReader(p.inputStream)).useLines { lines ->
                         lines.forEach { process ->
                             val parts = process.trim().split(regex, limit = 4)
+
+                            if (parts[0].trim().toInt() == MemoryAccessor.ourPID)
+                                return@forEach
 
                             val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[3].toLowerCase().contains(name.toLowerCase()) } }
                             if(dr != null)
