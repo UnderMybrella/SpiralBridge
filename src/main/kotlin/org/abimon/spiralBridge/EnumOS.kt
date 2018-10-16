@@ -43,7 +43,7 @@ enum class EnumOS {
                             if(parts.size < 3)
                                 return@forEach
 
-                            if (parts[1].trim().toInt() == MemoryAccessor.ourPID)
+                            if (parts[1].trim().toIntOrNull() == MemoryAccessor.ourPID)
                                 return@forEach
 
                             val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[0].toLowerCase().contains(name.toLowerCase()) } }
@@ -65,7 +65,7 @@ enum class EnumOS {
                         lines.forEach { process ->
                             val parts = process.trim().split(regex, limit = 4)
 
-                            if (parts[0].trim().toInt() == MemoryAccessor.ourPID)
+                            if (parts[0].trim().toIntOrNull() == MemoryAccessor.ourPID)
                                 return@forEach
 
                             val dr = EnumGame.values().firstOrNull { game -> game.processNames.any { name -> parts[3].toLowerCase().contains(name.toLowerCase()) } }
