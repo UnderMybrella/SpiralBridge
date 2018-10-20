@@ -21,6 +21,8 @@ dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.24.0'
 
+    implementation "org.abimon:SpiralBridgeNative:c69219c"
+
     compile "org.abimon:SpiralFormats:4d100b5"
     compile "org.abimon:OpenSpiralLanguage:cfd5233"
 

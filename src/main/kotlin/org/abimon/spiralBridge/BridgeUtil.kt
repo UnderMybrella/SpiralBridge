@@ -74,3 +74,17 @@ fun enableDebugForWindows() {
     } else if (os.indexOf("nux") >= 0) {
     }
 }
+
+fun ByteArray.readInt64LE(index: Int = 0): Long {
+    val a = this[index + 0].toLong()
+    val b = this[index + 1].toLong()
+    val c = this[index + 2].toLong()
+    val d = this[index + 3].toLong()
+    val e = this[index + 4].toLong()
+    val f = this[index + 5].toLong()
+    val g = this[index + 6].toLong()
+    val h = this[index + 7].toLong()
+
+    return (((b shl 8) or (a shl 0) shl 48)) or (((d shl 8) or (c shl 0)) shl 32) or
+            (((f shl 8) or (e shl 0)) shl 16) or (((h shl 8) or (g shl 0)) shl 0)
+}

@@ -2,7 +2,6 @@ package org.abimon.spiralBridge
 
 import kotlinx.coroutines.experimental.launch
 import org.abimon.colonelAccess.handle.MemoryAccessor
-import org.abimon.colonelAccess.osx.KernReturn
 import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
 import org.abimon.osl.SpiralDrillBit
@@ -13,6 +12,7 @@ import org.abimon.spiral.core.objects.scripting.lin.LinScript
 import org.abimon.spiral.core.objects.scripting.lin.dr1.DR1LoadScriptEntry
 import org.abimon.spiral.core.objects.scripting.lin.dr2.DR2LoadScriptEntry
 import org.abimon.spiral.core.utils.DataHandler
+import org.abimon.spiralBridge.nativeBridge.NativeWrapper
 import org.abimon.spiralBridge.osx.RemapMemoryAccessor
 import org.parboiled.parserunners.BasicParseRunner
 import org.parboiled.support.ParsingResult
@@ -101,62 +101,9 @@ object Synchronisation {
         println("Acquiring memory accessor...")
 
         val memoryAccessor = accessorForSystem(pid)
+        val nativeWrapper = NativeWrapper.obtainFor(memoryAccessor)
 
-        println("Grabbing viable memory regions of Danganronpa; heap, or stack")
-
-        val viableRegions = memoryAccessor.getAllViableDanganRegions()
-                .mapIndexed { index, memoryRegion -> memoryRegion to index.toLong() } //Saves memory heap later (I hope)
-
-        println("${viableRegions.size} viable regions")
-
-        val regionMemory = ByteArray((viableRegions.maxBy { region -> region.first.size }!!.first.size).toInt()) { 0 }
-
-        println("Currently have ${regionMemory.size} bytes stored in memory")
-
-        println("Benchmarking read times...")
-
-        val candidates: Array<IntArray> = viableRegions.map { (region) -> IntArray(region.size.toInt()) }.toTypedArray()
-
-        var gameStateStart: Long? = null
-        var currentCount: Int
-        var currentValue: Int
-        var currentMemValue: Int
-
-        val loopTimes = (0 until 10).map {
-            viableRegions.map { region ->
-                measureNanoTime {
-                    val regionNum = region.second.toInt()
-                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
-
-                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || sizeRead == null) {
-                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
-                        return null
-                    }
-
-                    try {
-                        memory.read(0, regionMemory, 0, sizeRead.toInt())
-
-                        for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
-                            currentCount = (candidates[regionNum][i] and COUNT_MASK) shr 16
-                            currentValue = (candidates[regionNum][i] and VALUE_MASK) shr 0
-                            currentMemValue = ((regionMemory[i].toInt() and 0xFF shl 8) or (regionMemory[i + 1].toInt() and 0xFF))
-
-                            if (currentValue == 1 && currentMemValue == 2) {
-                            } else if (currentValue == 2 && currentMemValue == 4) {
-                            } else if (currentValue == 4 && currentMemValue == 8) {
-                            } else if (currentValue == 8 && currentMemValue == 1) {
-                            } else if (currentValue == 0) {
-                            } else if (currentValue != currentMemValue) {
-                            }
-
-                            candidates[regionNum][i] = ((0 and VALUE_MASK) shl 16) or (0 and VALUE_MASK)
-                        }
-                    } finally {
-                        memoryAccessor.deallocateMemory(memory)
-                    }
-                }
-            }.sum()
-        }
+        val loopTimes = nativeWrapper.benchmark()
 
         val minLoopTime = loopTimes.min()!!
         val maxLoopTime = loopTimes.max()!!
@@ -323,100 +270,7 @@ object Synchronisation {
 
             println("Synchronising on $firstSyncValue, $secondSyncValue, $thirdSyncValue, and $fourthSyncValue")
 
-            //5a.   We begin listening out for any blocks of memory that have an int value of our initial synchronisation value, and store them in a candidates list
-            //5b.   Alternatively, if any of our blocks of memory have an int value of our initial synchronisation value * 4, we store them in a second candidates list
-            //5c.   If any block of memory ever ends up
-
-            var newValue: Int
-            var newCount: Int
-
-            while (gameStateStart == null) {
-                viableRegions.forEach { region ->
-                    val regionNum = region.second.toInt()
-                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
-
-                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || (sizeRead ?: 0) <= 0) {
-                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
-                        return null
-                    }
-
-                    try {
-                        memory.read(0, regionMemory, 0, sizeRead!!.toInt())
-
-                        for (i in 0 until (sizeRead - (sizeRead % 2) - 1).toInt()) {
-                            currentCount = (candidates[regionNum][i] and COUNT_MASK) shr 16
-                            currentValue = (candidates[regionNum][i] and VALUE_MASK) shr 0
-                            //TODO: If this ever breaks, check endianness
-                            currentMemValue = (((regionMemory[i + 1].toInt() and 0xFF) shl 8) or (regionMemory[i].toInt() and 0xFF))
-
-                            newValue = currentValue
-                            newCount = currentCount
-
-                            if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
-                                if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
-                                    break
-                                }
-
-                                newValue = secondSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
-                                if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
-                                    break
-                                }
-
-                                newValue = thirdSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
-                                if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
-                                    break
-                                }
-
-                                newValue = fourthSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
-                                if (currentCount == 3) {
-                                    gameStateStart = region.first.start + i - GAME_STATE_OFFSET
-                                    break
-                                }
-
-                                newValue = firstSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == 0) {
-                                when (currentMemValue) {
-                                    firstSyncValue -> {
-                                        newValue = firstSyncValue
-                                        newCount = 1
-                                    }
-                                    secondSyncValue -> {
-                                        newValue = secondSyncValue
-                                        newCount = 1
-                                    }
-                                    thirdSyncValue -> {
-                                        newValue = thirdSyncValue
-                                        newCount = 1
-                                    }
-                                    fourthSyncValue -> {
-                                        newValue = fourthSyncValue
-                                        newCount = 1
-                                    }
-                                }
-                            } else if (currentValue != currentMemValue) {
-                                newValue = 0
-                                newCount = 0
-                            }
-
-                            candidates[region.second.toInt()][i] = ((newCount and VALUE_MASK) shl 16) or (newValue and VALUE_MASK)
-                        }
-                    } finally {
-                        memoryAccessor.deallocateMemory(memory)
-                    }
-                }
-
-                //Thread.sleep(10)
-            }
+            val gameStateStart = nativeWrapper.findGameStart(firstSyncValue, secondSyncValue, thirdSyncValue, fourthSyncValue)
 
             println("Found Sync Address: $gameStateStart")
             println("Tracking down text buffer...")
@@ -439,112 +293,7 @@ object Synchronisation {
 
             println("Compilation of text synchronisation scripts took $compilingTextSynchronisationScriptTime ns")
 
-            candidates.forEach { intArray -> Arrays.fill(intArray, 0) }
-
-            var textBufferStart: Long? = null
-
-            while (textBufferStart == null) {
-                viableRegions.forEach { region ->
-                    val (memory, kret, sizeRead) = memoryAccessor.readMemory(region.first.start, region.first.size)
-
-                    if (memory == null || (kret != null && kret != KernReturn.KERN_SUCCESS) || (sizeRead ?: 0) <= 0) {
-                        println("ERR: Synchronisation failed; attempted to read ${region.first.size} bytes at memory region 0x${region.first.start.toString(16)}, got $kret, $sizeRead")
-                        return null
-                    }
-
-                    try {
-                        memory.read(0, regionMemory, 0, sizeRead!!.toInt())
-
-                        for (i in 0 until (sizeRead - (sizeRead % 8) - 7).toInt()) {
-                            currentCount = (candidates[region.second.toInt()][i] and COUNT_MASK) shr 16
-                            currentValue = (candidates[region.second.toInt()][i] and VALUE_MASK) shr 0
-
-                            currentMemValue = when (regionMemory.readInt64LE(i)) {
-                            //firstSyncTextBE -> firstSyncValue
-                                firstSyncTextLE -> firstSyncValue
-
-                            //secondSyncTextBE -> secondSyncValue
-                                secondSyncTextLE -> secondSyncValue
-
-                            //thirdSyncTextBE -> thirdSyncValue
-                                thirdSyncTextLE -> thirdSyncValue
-
-                            //fourthSyncTextBE -> fourthSyncValue
-                                fourthSyncTextLE -> fourthSyncValue
-
-                                0L -> 0
-
-                                else -> -1
-                            }
-
-                            newValue = currentValue
-                            newCount = currentCount
-
-                            if (currentValue == firstSyncValue && currentMemValue == secondSyncValue) {
-                                if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i
-                                    break
-                                }
-
-                                newValue = secondSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == secondSyncValue && currentMemValue == thirdSyncValue) {
-                                if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i
-                                    break
-                                }
-
-                                newValue = thirdSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == thirdSyncValue && currentMemValue == fourthSyncValue) {
-                                if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i
-                                    break
-                                }
-
-                                newValue = fourthSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == fourthSyncValue && currentMemValue == firstSyncValue) {
-                                if (currentCount == 3) {
-                                    textBufferStart = region.first.start + i
-                                    break
-                                }
-
-                                newValue = firstSyncValue
-                                newCount = ++currentCount
-                            } else if (currentValue == 0) {
-                                when (currentMemValue) {
-                                    firstSyncValue -> {
-                                        newValue = firstSyncValue
-                                        newCount = 1
-                                    }
-                                    secondSyncValue -> {
-                                        newValue = secondSyncValue
-                                        newCount = 1
-                                    }
-                                    thirdSyncValue -> {
-                                        newValue = thirdSyncValue
-                                        newCount = 1
-                                    }
-                                    fourthSyncValue -> {
-                                        newValue = fourthSyncValue
-                                        newCount = 1
-                                    }
-                                }
-                            } else if (currentValue != currentMemValue) {
-                                newValue = 0
-                                newCount = 0
-                            }
-
-                            candidates[region.second.toInt()][i] = ((newCount and VALUE_MASK) shl 16) or (newValue and VALUE_MASK)
-                        }
-                    } finally {
-                        memoryAccessor.deallocateMemory(memory)
-                    }
-                }
-
-                //Thread.sleep(10)
-            }
+            val textBufferStart = nativeWrapper.findTextBufferStart(firstSyncTextLE, secondSyncTextLE, thirdSyncTextLE, fourthSyncTextLE, firstSyncValue, secondSyncValue, thirdSyncValue, fourthSyncValue)
 
             println("Found Text Buffer address: $textBufferStart")
 
@@ -633,20 +382,6 @@ object Synchronisation {
 
     fun retrieve(name: String): ByteArray? =
             Synchronisation::class.java.classLoader.getResourceAsStream(name)?.use { stream -> stream.readBytes() }
-
-    fun ByteArray.readInt64LE(index: Int = 0): Long {
-        val a = this[index + 0].toLong()
-        val b = this[index + 1].toLong()
-        val c = this[index + 2].toLong()
-        val d = this[index + 3].toLong()
-        val e = this[index + 4].toLong()
-        val f = this[index + 5].toLong()
-        val g = this[index + 6].toLong()
-        val h = this[index + 7].toLong()
-
-        return (((b shl 8) or (a shl 0) shl 48)) or (((d shl 8) or (c shl 0)) shl 32) or
-                (((f shl 8) or (e shl 0)) shl 16) or (((h shl 8) or (g shl 0)) shl 0)
-    }
 
     fun ByteArray.readInt64BE(index: Int = 0): Long {
         val a = this[index + 0].toLong()
