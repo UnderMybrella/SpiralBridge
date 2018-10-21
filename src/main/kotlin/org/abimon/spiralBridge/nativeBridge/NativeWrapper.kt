@@ -9,6 +9,7 @@ abstract class NativeWrapper<T: Pointer, E: Any>(val memoryAccessor: MemoryAcces
         fun <T: Pointer, E: Any> obtainFor(memoryAccessor: MemoryAccessor<E, T>): NativeWrapper<T, E> {
             val os = System.getProperty("os.name", "generic").toLowerCase(Locale.ENGLISH)
             if (os.indexOf("mac") >= 0 || os.indexOf("darwin") >= 0) {
+                return MacOSNativeWrapper(memoryAccessor)
             } else if (os.indexOf("win") >= 0) {
             } else if (os.indexOf("nux") >= 0) {
             }
