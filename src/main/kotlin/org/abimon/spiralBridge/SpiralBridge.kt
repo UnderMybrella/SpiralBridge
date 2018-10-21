@@ -100,7 +100,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
             val baos = ByteArrayOutputStream()
 
             for (i in 0 until (readSize ?: 0) step 2) {
-                val read = memory.readIntXLE(i, 2)
+                val read = memory.readIntXLE(i, 2).toInt()
                 if (read == -1)
                     break
                 if (read == 0x00)
