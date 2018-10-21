@@ -24,7 +24,7 @@ dependencies {
     implementation "org.abimon:SpiralBridgeNative:c69219c"
 
     compile "org.abimon:SpiralFormats:4d100b5"
-    compile "org.abimon:OpenSpiralLanguage:cfd5233"
+    compile "org.abimon:OpenSpiralLanguage:2221b52"
 
     compile "org.abimon:ColonelAccess:8896069"
 

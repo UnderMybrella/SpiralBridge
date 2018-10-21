@@ -5,6 +5,7 @@ import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
 import org.abimon.osl.SpiralDrillBit
 import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
+import org.abimon.osl.results.CustomLinOSL
 import org.abimon.spiral.core.objects.customLin
 import org.abimon.spiral.core.objects.scripting.CustomLin
 import org.abimon.spiral.core.objects.scripting.lin.LinScript
@@ -438,11 +439,9 @@ object Synchronisation {
 
                         val products = head.operate(parser, valueParams)
 
-                        when (head.klass) {
-                            LinScript::class -> add(products as LinScript)
-                            Array<LinScript>::class -> addAll(products as Array<LinScript>)
-                            Unit::class -> {
-                            }
+                        when (products) {
+                            is LinScript -> add(products)
+                            is Array<*> -> if (products::class == CustomLinOSL.ARRAY_LIN_SCRIPT) addAll(products.filterIsInstance(CustomLinOSL.LIN_SCRIPT))
                         }
                     } catch (th: Throwable) {
                         throw IllegalArgumentException("Script line [${drillBit.script}] threw an error", th)
