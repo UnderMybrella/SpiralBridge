@@ -1,5 +1,6 @@
 package org.abimon.spiralBridge
 
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.abimon.colonelAccess.handle.MemoryAccessor
 import org.abimon.osl.OSL
@@ -300,8 +301,15 @@ object Synchronisation {
             val bridge = SpiralBridge(memoryAccessor, gameStateStart!!, textBufferStart)
 
             launch {
-                bridge.clearOutTextBuffer()
-                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, 0))
+                var data: SpiralBridgeData<*>? = bridge.readGameState()?.spiralBridgeData
+
+                while (data !is SpiralBridgeData.RequestAction || data.action !== BridgeRequest.TEXT_BUFFER_CLEAR) {
+                    delay(SpiralBridge.FRAMERATE, TimeUnit.MILLISECONDS)
+                    data = bridge.readGameState()?.spiralBridgeData
+                }
+
+                val (success) = bridge.clearOutTextBuffer()
+                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, if (success) 0  else 1))
             }
 
             return bridge
