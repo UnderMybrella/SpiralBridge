@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.UnaryOperator
 import kotlin.math.ceil
 import kotlin.math.max
@@ -55,6 +56,40 @@ object Synchronisation {
         val path = File(args.getWithPrompt("path", "Path: ") ?: return println("No path provided"))
 
         val bridge = Synchronisation.synchronise(path) ?: error("Synchronisation failed")
+        bridge.listeners.add { data ->
+            println(data)
+
+            when (data) {
+                is SpiralBridgeData.RequestAction -> {
+                    when (data.action) {
+                        is BridgeRequest.TEXT_BUFFER_CLEAR -> {
+                            val (success) = bridge.clearOutTextBuffer()
+
+                            bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, if (success) 0  else 1))
+                        }
+                        else -> {
+                            if (data.action.code == 110) {
+                                val gameState = bridge.readGameState()
+
+                                println(gameState?.data?.mapIndexed { index, i -> "\t$index. $i" }?.joinToString("\n"))
+
+                                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, if (gameState != null) 0 else 1))
+                            } else {
+                                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, 2))
+                            }
+                        }
+                    }
+
+
+                }
+            }
+
+            return@add Unit
+        }
+
+        while (bridge.scoutingJob.isActive) {
+            Thread.sleep(1000)
+        }
     }
 
     fun Array<String>.getWithPrompt(key: String, prompt: String): String? {
@@ -317,9 +352,35 @@ object Synchronisation {
             }
 
             println("Compilation of cleanup scripts took $compilingCleanupScriptTime ns")
+            val bridge = SpiralBridge(memoryAccessor, gameStateStart!!, textBufferStart)
 
+            val cleared = AtomicBoolean(false)
 
-            return SpiralBridge(memoryAccessor, gameStateStart!!, textBufferStart)
+            bridge.listeners.add { data ->
+                println(data)
+
+                when (data) {
+                    is SpiralBridgeData.RequestAction -> {
+                        when (data.action) {
+                            is BridgeRequest.TEXT_BUFFER_CLEAR -> {
+                                val (success) = bridge.clearOutTextBuffer()
+
+                                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, if (success) 0  else 1))
+                                cleared.set(success)
+                            }
+                            else -> bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, 2))
+                        }
+                    }
+                }
+
+                return@add Unit
+            }
+
+            while (!cleared.get()) {
+                Thread.sleep(10)
+            }
+
+            return bridge
         } finally {
             println("Finished synchronising, returning original scripts")
 

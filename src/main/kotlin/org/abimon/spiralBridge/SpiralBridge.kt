@@ -19,6 +19,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     }
 
     val listeners: MutableList<SpiralBridgeListener> = ArrayList()
+    var bufferForEmptyListeners: Boolean = true
     private val changes: MutableList<Long> = ArrayList()
     private var prevMemData = 0L
 
@@ -49,7 +50,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
         while (isActive && scoutingJob.isActive) {
             delay(FRAMERATE, TimeUnit.MILLISECONDS)
 
-            if (changes.isNotEmpty()) {
+            if (changes.isNotEmpty() && (!bufferForEmptyListeners || listeners.isNotEmpty())) { //wait for a listener to join
                 val data = SpiralBridgeData.valueFor(changes.removeAt(0))
                 listeners.forEach(data::offerTo)
             }
