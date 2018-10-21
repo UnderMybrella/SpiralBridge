@@ -301,6 +301,7 @@ object Synchronisation {
 
             launch {
                 bridge.clearOutTextBuffer()
+                bridge.writeSpiralBridgeData(SpiralBridgeData.valueFor(128, 0))
             }
 
             return bridge

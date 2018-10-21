@@ -16,7 +16,6 @@ Wait for %FRAMES_BETWEEN_VALUES frames
 Text|%FOURTH_SYNC_TEXT
 Wait for %FRAMES_BETWEEN_VALUES frames
 
-SpiralBridge: RequestAction, TEXT_BUFFER_CLEAR
 Wait for SpiralBridge ServerAck
 
 Text|[Empty]
