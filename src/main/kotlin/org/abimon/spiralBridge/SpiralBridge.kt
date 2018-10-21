@@ -30,8 +30,10 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
 
             val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
 
-            if (memory == null || readSize != 6L)
+            if (memory == null || readSize != 6L) {
+                println("Closing scouting job ($memory, $error, $readSize)")
                 break
+            }
 
             val op = memory.getShort(0).toLong()
             val param1 = memory.getShort(2).toLong()
