@@ -27,4 +27,8 @@ class MacOSNativeWrapper<T : Pointer, E : Any>(memoryAccessor: MemoryAccessor<E,
             return String(process.inputStream.readBytes()).split(',').map(String::trim).mapNotNull(String::toLongOrNull)
         return emptyList()
     }
+
+    init {
+        println("Using MacOS Native Wrapper; executing $tmpExecutable")
+    }
 }
