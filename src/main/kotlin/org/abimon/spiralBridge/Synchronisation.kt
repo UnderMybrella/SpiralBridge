@@ -1,8 +1,5 @@
 package org.abimon.spiralBridge
 
-import com.sun.jna.Memory
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
 import org.abimon.colonelAccess.handle.MemoryAccessor
 import org.abimon.osl.OSL
 import org.abimon.osl.OpenSpiralLanguageParser
@@ -186,6 +183,9 @@ object Synchronisation {
             val textScript = retrieve("scripts/text_synchronisation.osl")?.let { bytes -> String(bytes) } ?: ""
             val customTextScript: CustomLin
 
+            val cleanupScript = retrieve("scripts/cleanup.osl")?.let { bytes -> String(bytes) } ?: ""
+            val customCleanupScript: CustomLin
+
             val randChapter = ThreadLocalRandom.current().nextInt(0, 255)
             val randRoom = ThreadLocalRandom.current().nextInt(0, 255)
             val randScene = ThreadLocalRandom.current().nextInt(0, 255)
@@ -223,7 +223,8 @@ object Synchronisation {
                 parser["FRAMES_BETWEEN_VALUES"] = waitXFrames
 
                 customScript = parser.compile(script) ?: error("Error: script is an invalid OSL script")
-                customTextScript = parser.compile(textScript) ?: error("Error: script is an invalid OSL script")
+                customTextScript = parser.compile(textScript) ?: error("Error: text script is an invalid OSL script")
+                customCleanupScript = parser.compile(cleanupScript) ?: error("Error: cleanup script is an invalid OSL script")
             } finally {
 
             }
@@ -295,74 +296,30 @@ object Synchronisation {
 
             println("Compilation of text synchronisation scripts took $compilingTextSynchronisationScriptTime ns")
 
-            println("Launching text buffer clearing job")
-
-            var textBufferStart: Long? = null
-
-            val textBufferJob = launch {
-                val scoutingReadAddress = gameStateStart!! + (SpiralBridgeDrill.OP_CODE_GAME_STATE * 2)
-                var prevMemData = 0L
-
-                while (isActive) {
-                    delay(SpiralBridge.FRAMERATE, TimeUnit.MILLISECONDS)
-
-                    val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
-
-                    if (memory == null || readSize != 6L)
-                        break
-
-                    val op = memory.getShort(0).toLong()
-                    val param1 = memory.getShort(2).toLong()
-                    val param2 = memory.getShort(4).toLong()
-
-                    val memData = ((param1 shl 32) or (param2 shl 16)) or (op shl 0)
-
-                    if (memData != prevMemData) {
-                        prevMemData = memData
-                        val data = SpiralBridgeData.valueFor(memData)
-
-                        if (data is SpiralBridgeData.RequestAction) {
-                            try {
-                                if (data.action === BridgeRequest.TEXT_BUFFER_CLEAR) {
-                                    if (textBufferStart == null)
-                                        continue
-
-                                    val (textMemory, textError, textReadSize) = memoryAccessor.readMemory(textBufferStart!!, SpiralBridge.TEXT_BUFFER_SIZE)
-
-                                    if (textMemory == null)
-                                        continue
-
-                                    val (writeError) = memoryAccessor.writeMemory(textBufferStart!!, ByteArray(textReadSize?.toInt()
-                                            ?: 2) { 0x00 })
-                                }
-                            } finally {
-                                val mem = Memory(6)
-                                mem.setShort(0, SpiralBridgeData.ServerAck.op.toShort())
-
-                                //Reverse of this is (param1 shl 16) or param2
-                                val param = data.serialiseData()
-                                val param1Ack = param shr 16
-                                val param2Ack = (param and 0x0000FFFF)
-
-                                mem.setShort(2, param1Ack.toShort())
-                                mem.setShort(4, param2Ack.toShort())
-
-                                memoryAccessor.writeMemory(scoutingReadAddress, mem, mem.size())
-                            }
-                        }
-                    }
-                }
-            }
-
-            textBufferStart = nativeWrapper.findTextBufferStart(firstSyncTextLE, secondSyncTextLE, thirdSyncTextLE, fourthSyncTextLE, firstSyncValue, secondSyncValue, thirdSyncValue, fourthSyncValue)
+            val textBufferStart: Long? = nativeWrapper.findTextBufferStart(firstSyncTextLE, secondSyncTextLE, thirdSyncTextLE, fourthSyncTextLE, firstSyncValue, secondSyncValue, thirdSyncValue, fourthSyncValue)
 
             println("Found Text Buffer address: $textBufferStart")
 
-            val bridge = SpiralBridge(memoryAccessor, gameStateStart!!, textBufferStart)
+            println("Compiling cleanup scripts...")
 
-            textBufferJob.cancel()
+            val compilingCleanupScriptTime = measureNanoTime {
+                val scriptEntries = customCleanupScript.entries.toTypedArray()
+                scripts.forEach { file ->
+                    currentChapter = file.name.substring(1, 3).toInt()
+                    currentRoom = file.name.substring(4, 7).toInt()
+                    currentScene = file.name.substring(8, 11).toInt()
 
-            return bridge
+                    customCleanupScript.entries.clear()
+                    customCleanupScript.addAll(scriptEntries.map(replaceInScript::apply))
+
+                    FileOutputStream(file).use(customCleanupScript::compile)
+                }
+            }
+
+            println("Compilation of cleanup scripts took $compilingCleanupScriptTime ns")
+
+
+            return SpiralBridge(memoryAccessor, gameStateStart!!, textBufferStart)
         } finally {
             println("Finished synchronising, returning original scripts")
 

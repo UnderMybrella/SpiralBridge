@@ -21,7 +21,6 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     val listeners: MutableList<SpiralBridgeListener> = ArrayList()
     private val changes: MutableList<Long> = ArrayList()
     private var prevMemData = 0L
-    private var DEFAULT_LISTENER: SpiralBridgeListener? = this::defaultClear
 
     val scoutingReadAddress = gameStateAddress + (SpiralBridgeDrill.OP_CODE_GAME_STATE * 2)
     val scoutingJob: Job = launch {
@@ -52,12 +51,8 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
 
             if (changes.isNotEmpty()) {
                 val data = SpiralBridgeData.valueFor(changes.removeAt(0))
-                DEFAULT_LISTENER?.invoke(data)
                 listeners.forEach(data::offerTo)
             }
-
-            if (DEFAULT_LISTENER != null && listeners.isNotEmpty())
-                DEFAULT_LISTENER = null
         }
     }
 
@@ -141,19 +136,4 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
                 8 -> getLong(offset)
                 else -> throw IllegalArgumentException("$x is not 1, 2, 4, or 8")
             }
-
-    fun defaultClear(data: SpiralBridgeData<*>) {
-        when (data) {
-            is SpiralBridgeData.RequestAction -> {
-                when (data.action) {
-                    is BridgeRequest.TEXT_BUFFER_CLEAR -> {
-                        val (success) = clearOutTextBuffer()
-
-                        writeSpiralBridgeData(SpiralBridgeData.valueFor(128, if (success) 0  else 1))
-                    }
-                    else -> writeSpiralBridgeData(SpiralBridgeData.valueFor(128, 2))
-                }
-            }
-        }
-    }
 }

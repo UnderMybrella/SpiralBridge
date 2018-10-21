@@ -1,0 +1,10 @@
+OSL Script
+Game: DR1
+
+SpiralBridge: RequestAction, TEXT_BUFFER_CLEAR
+Wait for SpiralBridge ServerAck
+
+Text|[Empty]
+
+Script|%FILE_CHAPTER, %FILE_SCENE, %FILE_ROOM
+Stop Script|
