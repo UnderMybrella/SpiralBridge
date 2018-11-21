@@ -3,33 +3,37 @@ package org.abimon.spiralBridge
 import com.sun.jna.Pointer
 import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
 import java.util.*
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 
 data class DRGameState(val data: IntArray) {
     constructor(pointer: Pointer): this(IntArray(256) { i ->
         pointer.getShort((i * 2).toLong()).toInt()
     })
 
-    val timeOfDay: Int
-        get() = data[0]
+    var timeOfDay: Int by reference(0)
+    var health: Int by reference(13)
+    var gameMode: Int by reference(15)
 
-    val gameMode: Int
-        get() = data[15]
+    var spiralBridgeOp: Int by reference(SpiralBridgeDrill.OP_CODE_GAME_STATE)
 
-    val spiralBridgeOp: Int
-        get() = data[SpiralBridgeDrill.OP_CODE_GAME_STATE]
+    var spiralBridgeParamOne: Int by reference(SpiralBridgeDrill.OP_CODE_PARAM_BIG)
+    var spiralBridgeParamTwo: Int by reference(SpiralBridgeDrill.OP_CODE_PARAM_SMALL)
 
-    val spiralBridgeParamOne: Int
-        get() = data[SpiralBridgeDrill.OP_CODE_PARAM_BIG]
-    val spiralBridgeParamTwo: Int
-        get() = data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
-
-    val spiralBridgeParam: Int
+    var spiralBridgeParam: Int
         get() = (data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] shl 16) or data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
+        set(param) {
+            val param1 = param shr 16
+            val param2 = (param and 0x0000FFFF)
+
+            data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] = param1
+            data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL] = param2
+        }
 
     private var cachedSpiralBridgeHash: Int? = null
     private var cachedSpiralBridgeData: SpiralBridgeData<*>? = null
 
-    val spiralBridgeData: SpiralBridgeData<*>
+    var spiralBridgeData: SpiralBridgeData<*>
         get() {
             val op = data[SpiralBridgeDrill.OP_CODE_GAME_STATE]
             val param = (data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] shl 8) or data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL]
@@ -45,6 +49,15 @@ data class DRGameState(val data: IntArray) {
 
             return cachedSpiralBridgeData!!
         }
+        set(value) {
+            val param = value.serialiseData()
+            val param1 = param shr 16
+            val param2 = (param and 0x0000FFFF)
+
+            data[SpiralBridgeDrill.OP_CODE_GAME_STATE] = value.op
+            data[SpiralBridgeDrill.OP_CODE_PARAM_BIG] = param1
+            data[SpiralBridgeDrill.OP_CODE_PARAM_SMALL] = param2
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -57,5 +70,15 @@ data class DRGameState(val data: IntArray) {
 
     override fun hashCode(): Int {
         return Arrays.hashCode(data)
+    }
+
+    fun reference(offset: Int): ReadWriteProperty<DRGameState, Int> = object: ReadWriteProperty<DRGameState, Int> {
+        override fun getValue(thisRef: DRGameState, property: KProperty<*>): Int = thisRef[offset]
+        override fun setValue(thisRef: DRGameState, property: KProperty<*>, value: Int) { thisRef[offset] = value }
+    }
+
+    operator fun get(offset: Int): Int = data[offset]
+    operator fun set(offset: Int, value: Int) {
+        data[offset] = value
     }
 }

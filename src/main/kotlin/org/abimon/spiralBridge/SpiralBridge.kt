@@ -70,7 +70,7 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
 
     fun writeGameState(state: DRGameState): Pair<E?, Long?> {
         val mem = Memory((state.data.size * 2).toLong())
-        mem.write(0, state.data, 0, state.data.size)
+        mem.write(0, state.data.map(Int::toShort).toShortArray(), 0, state.data.size)
 
         return memoryAccessor.writeMemory(gameStateAddress, mem, mem.size())
     }
