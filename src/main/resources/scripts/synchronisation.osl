@@ -4,6 +4,9 @@ Game: DR1
 Fade in from black for 0 frames
 Music|0, 0, 0
 
+0x33|0, 0, 0, 1
+0x33|0, 0, 0, 0
+
 SpiralBridge: Synchronise, %FIRST_SYNC_VALUE
 Wait for %FRAMES_BETWEEN_VALUES frames
 
