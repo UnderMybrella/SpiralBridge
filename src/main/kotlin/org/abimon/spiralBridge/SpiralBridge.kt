@@ -2,14 +2,11 @@ package org.abimon.spiralBridge
 
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.*
 import org.abimon.colonelAccess.handle.MemoryAccessor
 import org.abimon.osl.drills.headerCircuits.SpiralBridgeDrill
 import org.abimon.spiral.core.utils.writeIntXLE
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
 
 class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P>, val gameStateAddress: Long, val textBufferAddress: Long? = null) {
     companion object {
@@ -24,9 +21,9 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     private var prevMemData = 0L
 
     val scoutingReadAddress = gameStateAddress + (SpiralBridgeDrill.OP_CODE_GAME_STATE * 2)
-    val scoutingJob: Job = launch {
+    val scoutingJob: Job = GlobalScope.launch {
         while (isActive && eventBusJob.isActive) {
-            delay(FRAMERATE, TimeUnit.MILLISECONDS)
+            delay(FRAMERATE)
 
             val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
 
@@ -48,9 +45,9 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
         }
     }
 
-    val eventBusJob: Job = launch {
+    val eventBusJob: Job = GlobalScope.launch {
         while (isActive && scoutingJob.isActive) {
-            delay(FRAMERATE, TimeUnit.MILLISECONDS)
+            delay(FRAMERATE)
 
             if (changes.isNotEmpty() && (!bufferForEmptyListeners || listeners.isNotEmpty())) { //wait for a listener to join
                 val data = SpiralBridgeData.valueFor(changes.removeAt(0))
