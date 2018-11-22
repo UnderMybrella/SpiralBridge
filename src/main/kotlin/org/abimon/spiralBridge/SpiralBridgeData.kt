@@ -14,6 +14,14 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
         val scene = fileID % 1000
     }
     data class RequestAction(val action: BridgeRequest): IntData(5, action.code)
+    data class StoreValue(val variable: Int, val action: Int, val value: Int): SpiralBridgeData<Triple<Int, Int, Int>>(6, Triple(variable, action, value)) {
+        constructor(param: Int): this(((param shr 0) and 0xFF), ((param shr 8) and 0xFF), ((param shr 16) and 0xFFFF))
+
+        override fun serialiseData(): Int = (variable shl 0) or (action shl 8) or (value shl 16)
+    }
+    data class StoreGameState(val gameState: Int): IntData(7, gameState)
+    data class RestoreGameState(val gameState: Int): IntData(8, gameState)
+    data class RunScript(val scriptNum: Int): IntData(9, scriptNum)
 
     object ServerAck: IntData(128, 0)
     data class ServerKey(val key: Int): IntData(129, key)
@@ -31,6 +39,10 @@ sealed class SpiralBridgeData<T>(open val op: Int, open val data: T) {
                 3 -> WaitForChoice
                 4 -> LoadBridgeFile(param)
                 5 -> RequestAction(BridgeRequest.valueOf(param))
+                6 -> StoreValue(param)
+                7 -> StoreGameState(param)
+                8 -> RestoreGameState(param)
+                9 -> RunScript(param)
 
                 128 -> ServerAck
                 129 -> ServerKey(param)
