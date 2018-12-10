@@ -18,41 +18,49 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
     val listeners: MutableList<SpiralBridgeListener> = ArrayList()
     var bufferForEmptyListeners: Boolean = true
     private val changes: MutableList<Long> = ArrayList()
-    private var prevMemData = 0L
 
     val scoutingReadAddress = gameStateAddress + (SpiralBridgeDrill.OP_CODE_GAME_STATE * 2)
     val scoutingJob: Job = GlobalScope.launch {
-        while (isActive && eventBusJob.isActive) {
-            delay(FRAMERATE)
+        try {
+            var prevMemData = 0L
+            while (isActive) {
+                delay(FRAMERATE)
 
-            val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
+                val (memory, error, readSize) = memoryAccessor.readMemory(scoutingReadAddress, 6)
 
-            if (memory == null || readSize != 6L) {
-                println("Closing scouting job ($memory, $error, $readSize)")
-                break
+                if (memory == null || readSize != 6L) {
+                    println("Closing scouting job ($memory, $error, $readSize)")
+                    break
+                }
+
+                val op = memory.getShort(0).toLong()
+                val param1 = memory.getShort(2).toLong()
+                val param2 = memory.getShort(4).toLong()
+
+                val memData = ((param1 shl 32) or (param2 shl 16)) or (op shl 0)
+
+                if (memData != prevMemData) {
+                    prevMemData = memData
+                    changes.add(memData)
+                }
             }
-
-            val op = memory.getShort(0).toLong()
-            val param1 = memory.getShort(2).toLong()
-            val param2 = memory.getShort(4).toLong()
-
-            val memData = ((param1 shl 32) or (param2 shl 16)) or (op shl 0)
-
-            if (memData != prevMemData) {
-                prevMemData = memData
-                changes.add(memData)
-            }
+        } finally {
+            eventBusJob.cancel()
         }
     }
 
     val eventBusJob: Job = GlobalScope.launch {
-        while (isActive && scoutingJob.isActive) {
-            delay(FRAMERATE)
+        try {
+            while (isActive) {
+                delay(FRAMERATE)
 
-            if (changes.isNotEmpty() && (!bufferForEmptyListeners || listeners.isNotEmpty())) { //wait for a listener to join
-                val data = SpiralBridgeData.valueFor(changes.removeAt(0))
-                listeners.forEach(data::offerTo)
+                if (changes.isNotEmpty() && (!bufferForEmptyListeners || listeners.isNotEmpty())) { //wait for a listener to join
+                    val data = SpiralBridgeData.valueFor(changes.removeAt(0))
+                    listeners.forEach(data::offerTo)
+                }
             }
+        } finally {
+            scoutingJob.cancel()
         }
     }
 
@@ -136,4 +144,8 @@ class SpiralBridge<E : Any, P : Pointer>(val memoryAccessor: MemoryAccessor<E, P
                 8 -> getLong(offset)
                 else -> throw IllegalArgumentException("$x is not 1, 2, 4, or 8")
             }
+
+    init {
+
+    }
 }
