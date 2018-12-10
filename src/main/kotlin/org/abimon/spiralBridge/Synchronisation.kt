@@ -43,10 +43,6 @@ object Synchronisation {
 
     val GAME_STATE_OFFSET = SpiralBridgeDrill.OP_CODE_PARAM_SMALL * 2
 
-    val FOUR_LETTER_WORDS = (0 until (256 * 256)).map { num ->
-        "[${(num shr 8).toChar()}${(num and 0xFF).toChar()}]"
-    }.shuffled().toTypedArray()
-
     @JvmStatic
     fun main(args: Array<String>) {
         val jsonParser = OSL.JsonParser()
